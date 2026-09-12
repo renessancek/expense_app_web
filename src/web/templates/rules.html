@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Regeln</h1>
+  {% if message %}<div class="flash ok">{{ message }}</div>{% endif %}
+  {% if error %}<div class="flash err">{{ error }}</div>{% endif %}
+
+  <div class="card">
+    <h2>Regel hinzufügen</h2>
+    <form action="/rules/add" method="post" class="row">
+      <div>
+        <label for="category">Kategorie</label>
+        <input id="category" type="text" name="category" required>
+      </div>
+      <div style="flex:1; min-width:16rem;">
+        <label for="keywords">Stichwörter (kommagetrennt)</label>
+        <input id="keywords" type="text" name="keywords" required style="width:100%;">
+      </div>
+      <button type="submit">Speichern</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Import / Backup</h2>
+    <div class="row">
+      <form action="/rules/import" method="post" enctype="multipart/form-data" class="row">
+        <div>
+          <label for="rules_file">JSON oder CSV</label>
+          <input id="rules_file" type="file" name="file" accept=".json,.csv,text/csv,application/json" required>
+        </div>
+        <button type="submit">Importieren</button>
+      </form>
+      <form action="/rules/restore" method="post">
+        <button type="submit" class="secondary">Letztes Backup wiederherstellen</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Vorhandene Regeln ({{ rules|length }})</h2>
+    {% for rule in rules %}
+    <div style="border-top:1px solid var(--border); padding:0.75rem 0;">
+      <form action="/rules/update" method="post" class="row">
+        <input type="hidden" name="category" value="{{ rule.category }}">
+        <div><strong>{{ rule.category }}</strong></div>
+        <div style="flex:1; min-width:16rem;">
+          <label>Stichwörter</label>
+          <input type="text" name="keywords" value="{{ rule.keywords|join(', ') }}" style="width:100%;">
+        </div>
+        <button type="submit">Aktualisieren</button>
+      </form>
+      <form action="/rules/delete" method="post" onsubmit="return confirm('Regel „{{ rule.category }}“ löschen?');">
+        <input type="hidden" name="category" value="{{ rule.category }}">
+        <button type="submit" class="danger">Löschen</button>
+      </form>
+    </div>
+    {% else %}
+    <p class="muted">Noch keine Regeln. Importiere eine JSON/CSV-Datei oder lege eine Regel an.</p>
+    {% endfor %}
+  </div>
+{% endblock %}
