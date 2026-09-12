@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Transaktionen</h1>
+  {% if message %}<div class="flash ok">{{ message }}</div>{% endif %}
+
+  <div class="card">
+    <h2>CSV importieren / Ordner scannen</h2>
+    <p class="muted">Scan-Ordner: <code>{{ statements_path }}</code></p>
+    <div class="row">
+      <form action="/upload" method="post" enctype="multipart/form-data" class="row">
+        <div>
+          <label for="file">CSV-Datei</label>
+          <input id="file" type="file" name="file" accept=".csv,text/csv" required>
+        </div>
+        <button type="submit">Hochladen</button>
+      </form>
+      <form action="/scan" method="post">
+        <button type="submit" class="secondary">Ordner scannen</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Filter</h2>
+    <form method="get" action="/" class="row">
+      <div>
+        <label for="category">Kategorie</label>
+        <select id="category" name="category">
+          {% for c in categories %}
+          <option value="{{ c }}" {% if c == category %}selected{% endif %}>{{ c }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="month">Monat</label>
+        <select id="month" name="month">
+          {% for m in months %}
+          <option value="{{ m }}" {% if m == month %}selected{% endif %}>{{ m }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="q">Suche</label>
+        <input id="q" type="text" name="q" value="{{ q }}" placeholder="Beschreibung…">
+      </div>
+      <button type="submit">Filtern</button>
+      <a class="btn secondary" href="/">Zurücksetzen</a>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Liste ({{ rows|length }})</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Datum</th>
+          <th>Beschreibung</th>
+          <th class="num">Betrag</th>
+          <th>Kategorie</th>
+          <th>Datei</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td>{{ row.date }}</td>
+          <td>{{ row.description }}</td>
+          <td class="num">{{ "%.2f"|format(row.amount) }} €</td>
+          <td>{{ row.category }}</td>
+          <td>{{ row.file }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="muted">Keine Transaktionen.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p><strong>Summe der angezeigten Transaktionen: {{ "%.2f"|format(listed_sum) }} €</strong></p>
+  </div>
+{% endblock %}
