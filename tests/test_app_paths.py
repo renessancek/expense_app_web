@@ -16,7 +16,7 @@ class TestAppPaths(unittest.TestCase):
     def test_windows_data_and_documents_paths(self):
         self.assertEqual(
             app_paths.user_data_dir(),
-            Path(r"C:\Users\Test\AppData\Local") / "Expense App Desktop",
+            Path(r"C:\Users\Test\AppData\Local") / "Expense App",
         )
         self.assertEqual(
             app_paths.documents_dir(),
@@ -26,8 +26,8 @@ class TestAppPaths(unittest.TestCase):
     @patch.object(app_paths.sys, "platform", "linux")
     @patch.dict(os.environ, {"XDG_DATA_HOME": "/tmp/data", "XDG_CACHE_HOME": "/tmp/cache"}, clear=True)
     def test_linux_xdg_paths(self):
-        self.assertEqual(app_paths.user_data_dir(), app_paths.Path("/tmp/data") / "expense-app-desktop")
-        self.assertEqual(app_paths.user_cache_dir(), app_paths.Path("/tmp/cache") / "expense-app-desktop")
+        self.assertEqual(app_paths.user_data_dir(), app_paths.Path("/tmp/data") / "expense-app")
+        self.assertEqual(app_paths.user_cache_dir(), app_paths.Path("/tmp/cache") / "expense-app")
 
     @patch.object(app_paths.sys, "platform", "linux")
     def test_linux_documents_dir_uses_xdg_user_dirs_file(self):

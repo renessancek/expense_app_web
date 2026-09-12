@@ -1,4 +1,4 @@
-﻿"""Shared transaction loading and filtering for the native desktop application."""
+"""Shared transaction loading and filtering for the Expense App."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Operating-system appropriate locations used by Expense App Desktop."""
+"""Operating-system appropriate locations used by Expense App (web)."""
 
 import os
 import re
@@ -8,14 +8,14 @@ import sys
 from pathlib import Path
 
 
-APP_DIR_NAME = "expense-app-desktop"
+APP_DIR_NAME = "expense-app"
 
 # Localized names used when XDG user-dirs are unavailable.
 _DOCUMENTS_DIR_CANDIDATES = ("Dokumente", "Documents", "Documentos")
 
 
 def expense_data_dir() -> Path | None:
-    """Return EXPENSE_DATA_DIR when set (used by the Docker / web deployment)."""
+    """Return EXPENSE_DATA_DIR when set (used by Docker / web deployment)."""
     configured = os.environ.get("EXPENSE_DATA_DIR", "").strip()
     if not configured:
         return None
@@ -31,10 +31,10 @@ def user_data_dir() -> Path:
     if sys.platform == "win32":
         configured_base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
         base = Path(configured_base) if configured_base else Path.home()
-        return base / "Expense App Desktop"
+        return base / "Expense App"
 
     if sys.platform == "darwin":
-        return Path.home() / "Library" / "Application Support" / "Expense App Desktop"
+        return Path.home() / "Library" / "Application Support" / "Expense App"
 
     configured_base = os.environ.get("XDG_DATA_HOME")
     base = Path(configured_base) if configured_base else Path.home() / ".local" / "share"
@@ -45,8 +45,8 @@ def statements_dir() -> Path:
     """Return the folder scanned for bank-statement CSV files.
 
     When EXPENSE_DATA_DIR is set (Docker / web), statements live under
-    ``{EXPENSE_DATA_DIR}/BankStatements``. Otherwise the desktop default
-    ``Documents/BankStatements`` (XDG-aware on Linux) is used.
+    ``{EXPENSE_DATA_DIR}/BankStatements``. Otherwise the default is
+    ``Documents/BankStatements`` (XDG-aware on Linux).
     """
     override = expense_data_dir()
     if override is not None:
@@ -55,7 +55,7 @@ def statements_dir() -> Path:
 
 
 def user_cache_dir() -> Path:
-    """Return the directory used for launcher logs and its lock file."""
+    """Return the directory used for cache and log files."""
     override = expense_data_dir()
     if override is not None:
         return override / "cache"
@@ -64,7 +64,7 @@ def user_cache_dir() -> Path:
         return user_data_dir() / "logs"
 
     if sys.platform == "darwin":
-        return Path.home() / "Library" / "Caches" / "Expense App Desktop"
+        return Path.home() / "Library" / "Caches" / "Expense App"
 
     configured_base = os.environ.get("XDG_CACHE_HOME")
     base = Path(configured_base) if configured_base else Path.home() / ".cache"

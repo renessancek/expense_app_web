@@ -1,7 +1,8 @@
-# Desktop (PySide6). For the FastAPI web UI / Docker image use requirements-web.txt.
-PySide6
-pdfplumber
-pandas
-watchdog
-openpyxl
-pyinstaller
+# Expense App (web) — FastAPI / Docker / local uvicorn
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+jinja2>=3.1.0
+python-multipart>=0.0.9
+pandas>=2.0.0
+openpyxl>=3.1.0
+pdfplumber>=0.11.0
