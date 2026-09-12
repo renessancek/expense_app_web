@@ -1,9 +1,0 @@
-# Web / Docker stack (no PySide6). Core parsing still needs pandas + openpyxl.
-# Desktop: pip install -r requirements.txt
-# Web (local): pip install -r requirements-web.txt
-fastapi>=0.115.0
-uvicorn[standard]>=0.30.0
-jinja2>=3.1.0
-python-multipart>=0.0.9
-pandas>=2.0.0
-openpyxl>=3.1.0
