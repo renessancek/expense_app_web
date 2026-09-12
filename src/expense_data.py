@@ -76,7 +76,9 @@ class ExpenseDataStore:
             frame = frame[frame["description"].astype(str).str.contains(
                 query, case=False, regex=False, na=False
             )]
-        return frame
+        if frame.empty:
+            return frame
+        return frame.sort_values(by="date", ascending=False, kind="mergesort")
 
     def reports_dataframe(self):
         if not self.import_reports:
