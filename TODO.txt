@@ -1,8 +1,0 @@
-ki dienste unter google play -> conmputerspiele
-strom unter drei internet
-essen für mai checken
-evn ist noch in gebühren
-mechanismus zum speichern vorheriger monate - inkrementeller upload
-transaktionliste auch per monat filterbar ✓
-transaktionssuche
-falsche sortierung der monate beim export
