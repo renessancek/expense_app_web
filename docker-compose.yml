@@ -10,8 +10,8 @@ services:
       # EXPENSE_AUTH_USER: admin
       # EXPENSE_AUTH_PASSWORD: change-me
     volumes:
-      - expense-data:/data
+      # Bind-mount a host directory (e.g. external HDD on a Raspberry Pi).
+      # Override with: EXPENSE_HOST_DATA_DIR=/mnt/your-disk/expense-app docker compose up -d
+      # Or set EXPENSE_HOST_DATA_DIR in a .env file next to this compose file.
+      - ${EXPENSE_HOST_DATA_DIR:-./data}:/data
     restart: unless-stopped
-
-volumes:
-  expense-data:
