@@ -1,4 +1,5 @@
-﻿PySide6
+# Desktop (PySide6). For the FastAPI web UI / Docker image use requirements-web.txt.
+PySide6
 pdfplumber
 pandas
 watchdog

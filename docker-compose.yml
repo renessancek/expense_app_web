@@ -1,0 +1,17 @@
+services:
+  expense-web:
+    build: .
+    image: expense-app-web:latest
+    ports:
+      - "8080:8080"
+    environment:
+      EXPENSE_DATA_DIR: /data
+      # Optional basic auth (omit both to leave the UI open on your LAN):
+      # EXPENSE_AUTH_USER: admin
+      # EXPENSE_AUTH_PASSWORD: change-me
+    volumes:
+      - expense-data:/data
+    restart: unless-stopped
+
+volumes:
+  expense-data:
