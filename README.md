@@ -137,3 +137,93 @@ Internet,"telekom, vodafone"
 ```
 
 Instead of a keywords column, keywords can sit in their own columns, or each row can hold a single keyword. Semicolon-separated German CSV exports work too.
+
+## Web UI (FastAPI + Docker)
+
+In addition to the PySide6 desktop app, this repository includes a small
+**server-rendered** FastAPI web UI that reuses the same core modules under
+[`src/`](src/) (`parser`, `categorizer`, `expense_data`, `scanner`).
+
+### Dependencies
+
+| Use case | Install |
+| --- | --- |
+| Desktop (PySide6) | `pip install -r requirements.txt` |
+| Web / Docker | `pip install -r requirements-web.txt` |
+
+`requirements-web.txt` does **not** include PySide6 or pyinstaller. The desktop
+stack stays unchanged.
+
+### Run locally (without Docker)
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements-web.txt
+export PYTHONPATH=src
+export EXPENSE_DATA_DIR="$PWD/.data"   # optional; defaults to the desktop user-data dir
+mkdir -p "$EXPENSE_DATA_DIR/BankStatements"
+.venv/bin/uvicorn web.main:app --host 0.0.0.0 --port 8080
+```
+
+Open `http://127.0.0.1:8080/`. Optional basic auth:
+
+```bash
+export EXPENSE_AUTH_USER=admin
+export EXPENSE_AUTH_PASSWORD='change-me'
+```
+
+If both auth variables are unset, the UI is open (fine for a trusted LAN).
+
+### Docker / Raspberry Pi / LAN deploy
+
+The image targets **linux/amd64** and **linux/arm64** (multi-arch friendly).
+
+```bash
+docker compose up -d --build
+```
+
+- Port **8080** is published.
+- Persistent volume mounts at **`/data`** inside the container (`EXPENSE_DATA_DIR=/data`).
+- Bank statement CSVs: put files in the volume under `BankStatements/`, or upload via the UI.
+- Rules are stored as `/data/rules.json` (with backups under `/data/backups/`).
+
+Example with auth via compose environment:
+
+```yaml
+environment:
+  EXPENSE_DATA_DIR: /data
+  EXPENSE_AUTH_USER: admin
+  EXPENSE_AUTH_PASSWORD: change-me
+```
+
+Then browse to `http://<host-lan-ip>:8080/` from another device on the network.
+
+#### Raspberry Pi notes (German)
+
+Auf einem Raspberry Pi (64-bit OS) reicht dasselbe `docker compose up -d --build`.
+Stelle sicher, dass Docker Buildx/BuildKit verfügbar ist, damit `arm64`-Images
+korrekt gebaut werden. Die Desktop-App (PySide6) bleibt parallel nutzbar; die
+Web-UI ist für den Zugriff im Heimnetz gedacht.
+
+### Web features (MVP)
+
+- CSV upload and optional scan of `BankStatements` under the data directory
+- Transaction list with category, month, and text filters (same `ExpenseDataStore.filtered`)
+- Rules: list, add, edit keywords, delete, import JSON/CSV, restore latest backup
+- Category sums and Excel download (same multi-sheet yearly report as desktop)
+- Optional HTTP Basic auth via `EXPENSE_AUTH_USER` / `EXPENSE_AUTH_PASSWORD`
+- Receipt OCR page is a stub in the MVP (use the desktop Receipts tab)
+
+### Tests
+
+Core tests are unchanged:
+
+```bash
+python -m unittest discover -s tests -t .
+```
+
+Web helper tests live in `tests/test_web_helpers.py` and do not require FastAPI
+to be installed for path/export assertions (openpyxl/pandas are enough). When
+running the full suite without web deps, that module still imports
+`web.export_helpers` which only needs pandas/openpyxl already present for the
+desktop stack.
