@@ -1,0 +1,16 @@
+.git
+.venv
+venv
+__pycache__
+*.pyc
+.pytest_cache
+.test_tmp
+build
+dist
+*.exe
+*.xlsx
+*.pdf
+.env
+.DS_Store
+.vscode
+**/__pycache__

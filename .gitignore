@@ -14,21 +14,8 @@ dist/
 .env
 
 # Project specific sensitive data
-rules.json
 backups/
-*.pdf
-*.csv
-*.xlsx
-*.exe
-
-# Example files shipped in the repo
-!rules/
-!rules/rules.json
-!rules/rules.csv
-
-# OS junk
-.DS_Store
-.aider*
+.data/
 
 # Editor
 .vscode/

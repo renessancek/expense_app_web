@@ -1,108 +1,88 @@
-# Expense App Desktop
+# Expense App (web)
 
-A local, browser-free desktop app for importing, categorizing, and reviewing bank-statement CSV files. The UI is native PySide6 — no browser and no local web server.
+A local FastAPI web app for importing, categorizing, and reviewing bank-statement CSV files. Server-rendered Jinja2 HTML — no React/SPA, no Postgres. Designed for Docker Compose on a LAN host or Raspberry Pi.
 
 ## Features
 
-- Scan CSV files from `Documents/BankStatements` or import them manually
-- Transaction table with sorting, pagination, and category, month, and live text filters
-- Import, create, delete, and restore rules from backups
-- Sum categories and export them as an Excel file
-- Receipts tab: choose a folder of PDFs or images, extract them locally (no API), and inspect each file from the import list. Nothing is saved to Transactions yet. Digital PDFs with a text layer work as-is; photos and scanned PDFs need Tesseract for OCR.
+- Upload CSV bank statements or scan `BankStatements` under the data directory
+- Transaction list with category, month, and text filters
+- Rules: list, add, edit keywords, delete, import JSON/CSV, restore latest backup
+- Category sums and multi-sheet Excel download
+- Optional HTTP Basic auth via `EXPENSE_AUTH_USER` / `EXPENSE_AUTH_PASSWORD`
+- Receipt OCR page is a stub in the MVP (core `receipt_extractor` module is present for later wiring)
 
-## Windows 10/11
+## Quick start (Docker Compose)
 
-### Set up and run
+Primary deploy path for LAN / Pi:
 
-```powershell
-py -3 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\start_expense_app.ps1
+```bash
+mkdir -p ./data/BankStatements
+docker compose up -d --build
 ```
 
-For a Start menu entry:
+- Port **8080** is published.
+- Host data is bind-mounted into **`/data`** in the container (`EXPENSE_DATA_DIR=/data`).
+- Default host path: **`./data`** next to `docker-compose.yml`.
+- Put statement CSVs under `BankStatements/` in that folder, or upload via the UI.
+- Rules are stored as `/data/rules.json` (backups under `/data/backups/`).
 
-```powershell
-.\install_windows_app.ps1
+### External disk on a Raspberry Pi
+
+Point the bind mount at a folder on the attached drive (example):
+
+```bash
+sudo mkdir -p /mnt/hdd/expense-app/BankStatements
+# Ensure Docker can write there (adjust user/group to match your setup):
+# sudo chown -R 1000:1000 /mnt/hdd/expense-app
+
+export EXPENSE_HOST_DATA_DIR=/mnt/hdd/expense-app
+docker compose up -d --build
 ```
 
-To start the app at login:
+Or put the same variable in a `.env` file beside `docker-compose.yml`:
 
-```powershell
-.\install_windows_app.ps1 -EnableAutostart
+```env
+EXPENSE_HOST_DATA_DIR=/mnt/hdd/expense-app
 ```
 
-To remove the Start menu and autostart shortcuts:
+Replace `/mnt/hdd/expense-app` with your real mount path. Inside the container the path stays `/data`; only the host side changes.
 
-```powershell
-.\uninstall_windows_app.ps1
+Optional auth in `docker-compose.yml`:
+
+```yaml
+environment:
+  EXPENSE_DATA_DIR: /data
+  EXPENSE_AUTH_USER: admin
+  EXPENSE_AUTH_PASSWORD: change-me
 ```
 
-The app opens a native desktop window. No browser is started.
+Then open `http://<host-lan-ip>:8080/` from another device on the network. If both auth variables are unset, the UI is open (fine for a trusted LAN).
 
-## Ubuntu/Linux
+The image targets **linux/amd64** and **linux/arm64** (multi-arch friendly). On a Raspberry Pi (64-bit OS), the same `docker compose up -d --build` works when Docker Buildx/BuildKit is available.
 
-### Set up and run
+## Local run (uvicorn)
 
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
-chmod +x start_expense_app.sh install_ubuntu_app.sh
-./start_expense_app.sh
+export PYTHONPATH=src
+export EXPENSE_DATA_DIR="$PWD/.data"   # optional; defaults to a user data dir
+mkdir -p "$EXPENSE_DATA_DIR/BankStatements"
+.venv/bin/uvicorn web.main:app --host 0.0.0.0 --port 8080
 ```
 
-For an application-menu entry:
+Open `http://127.0.0.1:8080/`.
 
-```bash
-./install_ubuntu_app.sh
-```
+## Data layout
 
-For autostart, add the absolute path to `start_expense_app.sh` under **Startup Applications** in system settings.
+When `EXPENSE_DATA_DIR` is set (Docker and recommended for local web), the app uses:
 
-To remove the application-menu entry:
+- `{EXPENSE_DATA_DIR}/rules.json` and `{EXPENSE_DATA_DIR}/backups/`
+- `{EXPENSE_DATA_DIR}/BankStatements/` for scanned CSVs
 
-```bash
-chmod +x uninstall_ubuntu_app.sh
-./uninstall_ubuntu_app.sh
-```
+Without the override, paths fall back to a per-user data directory (`expense-app` under XDG on Linux, or the platform equivalent).
 
-On Ubuntu the app also runs natively with PySide6 and does not need a browser or a local web server.
-
-### Optional Tesseract (OCR)
-
-Photos and scanned PDFs need the `tesseract` binary on `PATH` (languages `deu` and `eng`). Digital PDFs with a text layer work without Tesseract.
-
-If the host should not or cannot install Tesseract itself (immutable distros, no `pacman`/`apt`), set it up with Distrobox: [install-tesseract-linux-distrobox.md](install-tesseract-linux-distrobox.md).
-
-## Tests
-
-Application code lives in [`src/`](src/). Unit tests live in [`tests/`](tests/). From the project root, with the virtualenv active:
-
-```bash
-python -m unittest discover -s tests -t .
-```
-
-On Windows:
-
-```powershell
-.\.venv\Scripts\python.exe -m unittest discover -s tests -t .
-```
-
-## Build a Windows EXE
-
-After installing dependencies:
-
-```powershell
-.\build_windows_exe.ps1
-```
-
-The result is `dist\Expense App Desktop\Expense App Desktop.exe`.
-
-## Data
-
-Rules and backups stay in the personal data directory. On Windows that is `%LOCALAPPDATA%\Expense App Desktop`; on Linux `~/.local/share/expense-app-desktop` (or the folder configured via `XDG_DATA_HOME`). The default folder for bank statements is `BankStatements` in the personal Documents folder — on Linux the XDG path is used (for example `~/Dokumente/BankStatements` on German systems, otherwise `~/Documents/BankStatements`).
-
-The app still stores rules internally as `rules.json`. Import accepts JSON **and** CSV, for example a Google Sheets export (File → Download → CSV). A table with `category`/`kategorie` and `keywords`/`keyword` is enough.
+The app stores rules as `rules.json`. Import accepts JSON **and** CSV (for example a Google Sheets export). A table with `category`/`kategorie` and `keywords`/`keyword` is enough.
 
 Ready-to-import examples live in [`rules/`](rules/): [`rules/rules.json`](rules/rules.json) and [`rules/rules.csv`](rules/rules.csv).
 
@@ -137,3 +117,19 @@ Internet,"telekom, vodafone"
 ```
 
 Instead of a keywords column, keywords can sit in their own columns, or each row can hold a single keyword. Semicolon-separated German CSV exports work too.
+
+## Architecture
+
+- `src/web/` — FastAPI app, deps, templates, export helpers
+- Core modules under `src/`: `parser`, `categorizer`, `expense_data`, `scanner`, `receipt_extractor`, `app_paths`
+- Single dependency file: `requirements.txt` (no desktop / PySide6 stack)
+
+## Tests
+
+Application code lives in [`src/`](src/). Unit tests live in [`tests/`](tests/). From the project root, with the virtualenv active:
+
+```bash
+python -m unittest discover -s tests -t .
+```
+
+Web helper tests live in `tests/test_web_helpers.py`.

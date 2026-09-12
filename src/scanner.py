@@ -1,12 +1,12 @@
 import os
 from pathlib import Path
 
-from app_paths import documents_dir
+from app_paths import statements_dir
 
 
 class Scanner:
     def __init__(self, watch_path=None):
-        self.watch_path = watch_path or str(documents_dir() / "BankStatements")
+        self.watch_path = watch_path or str(statements_dir())
         os.makedirs(self.watch_path, exist_ok=True)
 
     def scan_for_csvs(self):
