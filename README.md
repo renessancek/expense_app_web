@@ -16,13 +16,36 @@ A local FastAPI web app for importing, categorizing, and reviewing bank-statemen
 Primary deploy path for LAN / Pi:
 
 ```bash
+mkdir -p ./data/BankStatements
 docker compose up -d --build
 ```
 
 - Port **8080** is published.
-- Persistent volume mounts at **`/data`** inside the container (`EXPENSE_DATA_DIR=/data`).
-- Put statement CSVs under `BankStatements/` in the volume, or upload via the UI.
+- Host data is bind-mounted into **`/data`** in the container (`EXPENSE_DATA_DIR=/data`).
+- Default host path: **`./data`** next to `docker-compose.yml`.
+- Put statement CSVs under `BankStatements/` in that folder, or upload via the UI.
 - Rules are stored as `/data/rules.json` (backups under `/data/backups/`).
+
+### External disk on a Raspberry Pi
+
+Point the bind mount at a folder on the attached drive (example):
+
+```bash
+sudo mkdir -p /mnt/hdd/expense-app/BankStatements
+# Ensure Docker can write there (adjust user/group to match your setup):
+# sudo chown -R 1000:1000 /mnt/hdd/expense-app
+
+export EXPENSE_HOST_DATA_DIR=/mnt/hdd/expense-app
+docker compose up -d --build
+```
+
+Or put the same variable in a `.env` file beside `docker-compose.yml`:
+
+```env
+EXPENSE_HOST_DATA_DIR=/mnt/hdd/expense-app
+```
+
+Replace `/mnt/hdd/expense-app` with your real mount path. Inside the container the path stays `/data`; only the host side changes.
 
 Optional auth in `docker-compose.yml`:
 
