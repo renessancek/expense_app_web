@@ -146,16 +146,16 @@ class TestParser(unittest.TestCase):
             any("separator=';'" in line and "encoding=utf-8" in line for line in captured.output)
         )
 
-    def test_easybank_headerless_csv_uses_fixed_headers(self):
+    def test_bank_headerless_csv_uses_fixed_headers(self):
         csv_data = io.StringIO(
             '123456;Supermarket;2023-01-01;2023-01-01;-12,50;EUR\n'
             '123456;Salary;2023-01-02;2023-01-02;100,00;EUR\n'
         )
-        csv_data.name = 'EASYBANK_statement.csv'
+        csv_data.name = 'bank_Umsatzliste_20260720_1920.csv'
 
         transactions, report = self.parser.parse_bank_statement_with_report(csv_data)
 
-        self.assertEqual(report['File'], 'EASYBANK_statement.csv')
+        self.assertEqual(report['File'], 'bank_Umsatzliste_20260720_1920.csv')
         self.assertEqual(report['rows_read'], 2)
         self.assertEqual(report['imported_expenses'], 1)
         self.assertEqual(transactions[0]['date'], '2023-01-01')
