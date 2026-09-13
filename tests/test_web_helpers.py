@@ -83,10 +83,7 @@ class ExportHelperTests(unittest.TestCase):
         expenses = selected_expenses_for_export(
             self._frame(), ["Supermarkt", "Amazon"]
         )
-        report = build_yearly_statistics_report(
-            expenses,
-            [{"category": "Supermarkt", "keywords": ["rewe"]}],
-        )
+        report = build_yearly_statistics_report(expenses)
 
         self.assertEqual(len(report["monthly_tables"]), 1)
         jan = report["monthly_tables"][0]
@@ -112,13 +109,11 @@ class ExportHelperTests(unittest.TestCase):
         self.assertEqual(yearly[-1]["Year"], "GRAND TOTAL")
         self.assertAlmostEqual(yearly[-1]["amount"], 33.5)
 
-        configured = report["configured_categories"]["rows"]
-        self.assertEqual(configured[0]["category"], "Supermarkt")
-        self.assertEqual(configured[0]["keywords"], "rewe")
+        self.assertNotIn("configured_categories", report)
 
     def test_build_yearly_statistics_report_empty(self):
         empty = selected_expenses_for_export(self._frame(), ["NichtVorhanden"])
-        report = build_yearly_statistics_report(empty, [])
+        report = build_yearly_statistics_report(empty)
         self.assertEqual(report["monthly_tables"], [])
         self.assertEqual(report["monthly_totals"]["rows"], [])
 
@@ -153,7 +148,7 @@ class TransactionsImportReportsTemplateTests(unittest.TestCase):
         html = self._render(
             import_reports=[
                 {
-                    "File": "EASYBANK_statement.csv",
+                    "File": "bank_statement.csv",
                     "status": "Imported",
                     "rows_read": 2,
                     "imported_expenses": 1,
@@ -177,7 +172,7 @@ class TransactionsImportReportsTemplateTests(unittest.TestCase):
             ]
         )
         self.assertIn("Importierte Dateien (2)", html)
-        self.assertIn("EASYBANK_statement.csv", html)
+        self.assertIn("bank_statement.csv", html)
         self.assertIn("broken.csv", html)
         self.assertIn("Importiert", html)
         self.assertIn("Nicht importiert", html)
