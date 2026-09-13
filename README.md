@@ -7,7 +7,7 @@ A local FastAPI web app for importing, categorizing, and reviewing bank-statemen
 - Upload CSV bank statements or scan `BankStatements` under the data directory
 - Transaction list with category, month, and text filters
 - Rules: list, add, edit keywords, delete, import JSON/CSV, restore latest backup
-- Category sums and multi-sheet Excel download
+- Auswertung: yearly statistics report on the web (category filter, former Excel sheets)
 - Optional HTTP Basic auth via `EXPENSE_AUTH_USER` / `EXPENSE_AUTH_PASSWORD`
 - Receipt OCR page is a stub in the MVP (core `receipt_extractor` module is present for later wiring)
 
@@ -120,7 +120,7 @@ Instead of a keywords column, keywords can sit in their own columns, or each row
 
 ## Architecture
 
-- `src/web/` — FastAPI app, deps, templates, export helpers
+- `src/web/` — FastAPI app, deps, templates, report helpers
 - Core modules under `src/`: `parser`, `categorizer`, `expense_data`, `scanner`, `receipt_extractor`, `app_paths`
 - Single dependency file: `requirements.txt` (no desktop / PySide6 stack)
 

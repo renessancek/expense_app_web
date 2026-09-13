@@ -22,10 +22,10 @@ from jinja2 import Environment, FileSystemLoader  # noqa: E402
 
 from app_paths import expense_data_dir, statements_dir, user_data_dir  # noqa: E402
 from web.export_helpers import (  # noqa: E402
+    build_yearly_statistics_report,
     category_totals,
     listed_amount_sum,
     selected_expenses_for_export,
-    write_yearly_statistics_export,
 )
 
 
@@ -79,16 +79,48 @@ class ExportHelperTests(unittest.TestCase):
         self.assertEqual(list(totals["Category"]), ["Supermarkt", "Amazon"])
         self.assertAlmostEqual(float(totals.iloc[0]["Total spent (€)"]), 23.5)
 
-    def test_excel_export_bytes(self):
+    def test_build_yearly_statistics_report(self):
         expenses = selected_expenses_for_export(
             self._frame(), ["Supermarkt", "Amazon"]
         )
-        payload = write_yearly_statistics_export(
+        report = build_yearly_statistics_report(
             expenses,
-            ["Supermarkt", "Amazon"],
             [{"category": "Supermarkt", "keywords": ["rewe"]}],
         )
-        self.assertTrue(payload.startswith(b"PK"))  # zip/xlsx magic
+
+        self.assertEqual(len(report["monthly_tables"]), 1)
+        jan = report["monthly_tables"][0]
+        self.assertEqual(jan["title"], "2024-01")
+        self.assertEqual(jan["columns"], ["category", "amount"])
+        self.assertEqual(jan["rows"][-1]["category"], "TOTAL")
+        self.assertAlmostEqual(jan["rows"][-1]["amount"], 33.5)
+
+        totals_rows = report["monthly_totals"]["rows"]
+        self.assertEqual(totals_rows[-1]["Month"], "GRAND TOTAL")
+        self.assertAlmostEqual(totals_rows[-1]["amount"], 33.5)
+
+        averages = {row["category"]: row["average_per_month"] for row in report["average_monthly"]["rows"]}
+        self.assertAlmostEqual(averages["Supermarkt"], 23.5)
+        self.assertAlmostEqual(averages["Amazon"], 10.0)
+
+        comparison = report["yearly_comparison"]
+        self.assertIn("category", comparison["columns"])
+        self.assertIn("2024", comparison["columns"])
+        self.assertEqual(comparison["rows"][-1]["category"], "TOTAL")
+
+        yearly = report["yearly_summary"]["rows"]
+        self.assertEqual(yearly[-1]["Year"], "GRAND TOTAL")
+        self.assertAlmostEqual(yearly[-1]["amount"], 33.5)
+
+        configured = report["configured_categories"]["rows"]
+        self.assertEqual(configured[0]["category"], "Supermarkt")
+        self.assertEqual(configured[0]["keywords"], "rewe")
+
+    def test_build_yearly_statistics_report_empty(self):
+        empty = selected_expenses_for_export(self._frame(), ["NichtVorhanden"])
+        report = build_yearly_statistics_report(empty, [])
+        self.assertEqual(report["monthly_tables"], [])
+        self.assertEqual(report["monthly_totals"]["rows"], [])
 
 
 class TransactionsImportReportsTemplateTests(unittest.TestCase):
