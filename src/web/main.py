@@ -242,7 +242,7 @@ def create_app() -> FastAPI:
             selected = [c for c in all_categories if default_export_selected(c)]
 
         expenses = selected_expenses_for_export(store.dataframe, selected)
-        report = build_yearly_statistics_report(expenses, store.categorizer.rules)
+        report = build_yearly_statistics_report(expenses)
         has_expenses = not expenses.empty
 
         return templates.TemplateResponse(
