@@ -66,6 +66,7 @@ def create_app() -> FastAPI:
                 "listed_sum": listed_amount_sum(frame),
                 "message": message,
                 "statements_path": str(statements_dir()),
+                "import_reports": store.import_reports,
                 "nav": "transactions",
             },
         )
