@@ -1,9 +1,70 @@
 {% extends "base.html" %}
 {% block content %}
-  <h1>Belege (OCR)</h1>
+  <h1>Belege</h1>
+  {% if message %}<div class="flash ok">{{ message }}</div>{% endif %}
+  {% if error %}<div class="flash err">{{ error }}</div>{% endif %}
+
   <div class="card">
-    <p>Beleg-OCR ist in diesem Web-MVP noch nicht angebunden. Nutze vorerst die Desktop-App
-       (Reiter „Receipts“) für lokale PDF-/Bild-Extraktion mit optionalem Tesseract.</p>
-    <p class="muted">Geplant: Ordner-Upload und Anzeige der Extraktionsergebnisse ohne Speicherung in Transaktionen.</p>
+    <h2>Hochladen / Ordner scannen</h2>
+    <p class="muted">Belege-Ordner: <code>{{ receipts_path }}</code>
+      · {{ folder_count }} Datei(en) im Ordner
+      {% if folder_files %}({% for name in folder_files %}{{ name }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}
+    </p>
+    <p class="muted">Extraktion zeigt Händler, Datum, Summe und Positionen — es wird nichts in die Transaktionen geschrieben.
+      Digitale PDFs brauchen kein Tesseract; gescannte PDFs und Fotos schon (im Docker-Image enthalten).</p>
+    <div class="row">
+      <form action="/receipts/upload" method="post" enctype="multipart/form-data">
+        <div class="field">
+          <label for="files">Bilder / PDFs</label>
+          <input id="files" type="file" name="files" accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,image/*,application/pdf" multiple required>
+        </div>
+        <button type="submit">Hochladen</button>
+      </form>
+      <form action="/receipts/scan" method="post">
+        <button type="submit" class="secondary">Ordner scannen</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Letzte Extraktion ({{ rows|length }})</h2>
+    {% if rows %}
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Datei</th>
+            <th>Status</th>
+            <th>Händler</th>
+            <th>Datum</th>
+            <th class="num">Summe</th>
+            <th class="num">Positionen</th>
+            <th>Fehler/Hinweise</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr class="{% if row.status != 'Extracted' %}row-warn{% endif %}">
+            <td>{{ row.file }}</td>
+            <td class="{% if row.status == 'Extracted' %}status-ok{% else %}status-bad{% endif %}">
+              {{ row.status|status_de }}
+            </td>
+            <td>{{ row.merchant or "—" }}</td>
+            <td>{{ row.date|date_de or "—" }}</td>
+            <td class="num">{% if row.total is not none %}{{ row.total|total_de }}{% else %}—{% endif %}</td>
+            <td class="num">{{ row.item_count }}</td>
+            <td class="muted">
+              {% if row.error %}{{ row.error }}{% elif row.result and row.result.notes %}{{ row.result.notes }}{% else %}—{% endif %}
+            </td>
+            <td><a href="/receipts/detail?path={{ row.path|urlencode }}">Details</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="muted">Noch keine Extraktion. Dateien hochladen oder den Ordner scannen.</p>
+    {% endif %}
   </div>
 {% endblock %}

@@ -48,6 +48,9 @@ def ensure_data_dirs() -> None:
     root.mkdir(parents=True, exist_ok=True)
     statements_dir().mkdir(parents=True, exist_ok=True)
     (root / "uploads").mkdir(parents=True, exist_ok=True)
+    receipts = root / "receipts"
+    receipts.mkdir(parents=True, exist_ok=True)
+    (receipts / "uploads").mkdir(parents=True, exist_ok=True)
 
 
 def get_store() -> ExpenseDataStore:
