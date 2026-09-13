@@ -9,10 +9,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Runtime certs for HTTPS health/downloads; keep image slim (no desktop/Qt).
+# Runtime certs + Tesseract (deu/eng) for Belege OCR on photos/scanned PDFs.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
+        tesseract-ocr \
+        tesseract-ocr-deu \
+        tesseract-ocr-eng \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /app/requirements.txt
@@ -21,7 +24,7 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY src /app/src
 COPY rules /app/rules
 
-RUN mkdir -p /data/BankStatements /data/uploads /data/backups \
+RUN mkdir -p /data/BankStatements /data/uploads /data/backups /data/receipts /data/receipts/uploads \
     && useradd --create-home --uid 10001 --shell /usr/sbin/nologin expense \
     && chown -R expense:expense /data /app
 
