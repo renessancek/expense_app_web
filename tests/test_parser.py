@@ -18,7 +18,8 @@ class TestParser(unittest.TestCase):
         mock_pd.read_csv.side_effect = Exception("Failed")
         file_input = MagicMock()
 
-        result = self.parser.parse_bank_statement(file_input)
+        with self.assertLogs("parser", level="WARNING"):
+            result = self.parser.parse_bank_statement(file_input)
         self.assertEqual(result, [])
 
     @patch('parser.pd')
@@ -28,7 +29,8 @@ class TestParser(unittest.TestCase):
         mock_pd.read_csv.return_value = mock_df
 
         file_input = MagicMock()
-        result = self.parser.parse_bank_statement(file_input)
+        with self.assertLogs("parser", level="WARNING"):
+            result = self.parser.parse_bank_statement(file_input)
         self.assertEqual(result, [])
 
     @patch('parser.pd')
@@ -109,6 +111,41 @@ class TestParser(unittest.TestCase):
         self.assertEqual(report['skipped_excluded'], 1)
         self.assertEqual(report['skipped_missing_data'], 1)
 
+    def test_unreadable_csv_sets_report_details_and_warns(self):
+        csv_data = io.StringIO("not a bank statement\njust text\n")
+
+        with self.assertLogs("parser", level="WARNING") as captured:
+            transactions, report = self.parser.parse_bank_statement_with_report(csv_data)
+
+        self.assertEqual(transactions, [])
+        self.assertEqual(report["status"], "Not imported")
+        self.assertIn("Could not read a supported CSV format", report["details"])
+        self.assertTrue(any("Could not parse CSV" in line for line in captured.output))
+
+    def test_missing_columns_listed_in_report_details(self):
+        csv_data = io.StringIO("Foo;Bar;Betrag\nshop;-; -12,50\n")
+
+        with self.assertLogs("parser", level="WARNING") as captured:
+            transactions, report = self.parser.parse_bank_statement_with_report(csv_data)
+
+        self.assertEqual(transactions, [])
+        self.assertEqual(report["status"], "Not imported")
+        self.assertIn("Required columns are missing", report["details"])
+        self.assertIn("Foo", report["details"])
+        self.assertTrue(any("Required columns are missing" in line for line in captured.output))
+
+    def test_successful_load_logs_separator_at_debug(self):
+        csv_data = io.StringIO("Datum;Name;Betrag\n2023-01-01;Shop;-1,00\n")
+
+        with self.assertLogs("parser", level="DEBUG") as captured:
+            transactions, report = self.parser.parse_bank_statement_with_report(csv_data)
+
+        self.assertEqual(len(transactions), 1)
+        self.assertEqual(report["status"], "Imported")
+        self.assertTrue(
+            any("separator=';'" in line and "encoding=utf-8" in line for line in captured.output)
+        )
+
     def test_easybank_headerless_csv_uses_fixed_headers(self):
         csv_data = io.StringIO(
             '123456;Supermarket;2023-01-01;2023-01-01;-12,50;EUR\n'
@@ -118,6 +155,7 @@ class TestParser(unittest.TestCase):
 
         transactions, report = self.parser.parse_bank_statement_with_report(csv_data)
 
+        self.assertEqual(report['File'], 'EASYBANK_statement.csv')
         self.assertEqual(report['rows_read'], 2)
         self.assertEqual(report['imported_expenses'], 1)
         self.assertEqual(transactions[0]['date'], '2023-01-01')

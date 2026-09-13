@@ -18,6 +18,8 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from jinja2 import Environment, FileSystemLoader  # noqa: E402
+
 from app_paths import expense_data_dir, statements_dir, user_data_dir  # noqa: E402
 from web.export_helpers import (  # noqa: E402
     category_totals,
@@ -87,6 +89,67 @@ class ExportHelperTests(unittest.TestCase):
             [{"category": "Supermarkt", "keywords": ["rewe"]}],
         )
         self.assertTrue(payload.startswith(b"PK"))  # zip/xlsx magic
+
+
+class TransactionsImportReportsTemplateTests(unittest.TestCase):
+    def _render(self, **overrides):
+        templates_dir = ROOT / "src" / "web" / "templates"
+        env = Environment(loader=FileSystemLoader(str(templates_dir)))
+        context = {
+            "title": "Transaktionen",
+            "nav": "transactions",
+            "message": "",
+            "statements_path": "/data/BankStatements",
+            "rows": [],
+            "categories": ["All"],
+            "months": ["All"],
+            "category": "All",
+            "month": "All",
+            "q": "",
+            "listed_sum": 0.0,
+            "import_reports": [],
+        }
+        context.update(overrides)
+        return env.get_template("transactions.html").render(**context)
+
+    def test_empty_reports_show_placeholder(self):
+        html = self._render()
+        self.assertIn("Importierte Dateien (0)", html)
+        self.assertIn("Noch keine Dateien geladen", html)
+
+    def test_reports_list_source_files_and_status(self):
+        html = self._render(
+            import_reports=[
+                {
+                    "File": "EASYBANK_statement.csv",
+                    "status": "Imported",
+                    "rows_read": 2,
+                    "imported_expenses": 1,
+                    "skipped_non_expenses": 1,
+                    "skipped_missing_data": 0,
+                    "skipped_excluded": 0,
+                    "skipped_errors": 0,
+                    "details": "",
+                },
+                {
+                    "File": "broken.csv",
+                    "status": "Not imported",
+                    "rows_read": 0,
+                    "imported_expenses": 0,
+                    "skipped_non_expenses": 0,
+                    "skipped_missing_data": 0,
+                    "skipped_excluded": 0,
+                    "skipped_errors": 0,
+                    "details": "Could not read a supported CSV format or find an amount column.",
+                },
+            ]
+        )
+        self.assertIn("Importierte Dateien (2)", html)
+        self.assertIn("EASYBANK_statement.csv", html)
+        self.assertIn("broken.csv", html)
+        self.assertIn("Importiert", html)
+        self.assertIn("Nicht importiert", html)
+        self.assertIn("Could not read a supported CSV format", html)
 
 
 if __name__ == "__main__":

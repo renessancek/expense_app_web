@@ -1,6 +1,11 @@
-import pandas as pd
 import hashlib
+import logging
 import os
+
+import pandas as pd
+
+logger = logging.getLogger(__name__)
+
 
 class Parser:
     @staticmethod
@@ -16,6 +21,7 @@ class Parser:
     def parse_bank_statement_with_report(file_input):
         """Parse a statement and return both transactions and an import report."""
         report = {
+            'File': Parser._source_filename(file_input),
             'rows_read': 0,
             'imported_expenses': 0,
             'skipped_non_expenses': 0,
@@ -36,14 +42,34 @@ class Parser:
 
         final_cols = Parser._map_columns(df)
         if not final_cols:
+            found = list(df.columns)
             report['status'] = 'Not imported'
-            report['details'] = 'Required columns are missing (date, description, or amount).'
+            report['details'] = (
+                'Required columns are missing (date, description, or amount). '
+                f'Found: {found}'
+            )
+            logger.warning("%s", report['details'])
             return [], report
 
         transactions, skipped = Parser._extract_transactions(df, final_cols, include_report=True)
         report['imported_expenses'] = len(transactions)
         report.update(skipped)
+        if skipped['skipped_errors']:
+            report['details'] = (
+                f"{skipped['skipped_errors']} row(s) skipped due to errors."
+            )
         return transactions, report
+
+    @staticmethod
+    def _source_filename(file_input):
+        """Return the basename of a path or file-like object, or an empty string."""
+        if isinstance(file_input, (str, os.PathLike)):
+            raw = str(file_input)
+        else:
+            raw = getattr(file_input, "name", "") or ""
+            if not isinstance(raw, (str, os.PathLike)):
+                raw = ""
+        return os.path.basename(str(raw))
 
     @staticmethod
     def _load_csv(file_input):
@@ -54,10 +80,7 @@ class Parser:
 
         # EASYBANK exports may contain transaction rows without a header row.
         # Identify them by filename and supply the bank's fixed column layout.
-        file_name = os.path.basename(
-            str(file_input if isinstance(file_input, (str, os.PathLike))
-                else getattr(file_input, 'name', ''))
-        )
+        file_name = Parser._source_filename(file_input)
         if file_name.upper().startswith('EASYBANK'):
             for enc in ['utf-8', 'latin-1', 'cp1252']:
                 try:
@@ -71,7 +94,11 @@ class Parser:
                         header=None,
                         names=easybank_columns,
                     )
-                    print(f"Successfully loaded headerless EASYBANK CSV with encoding='{enc}'")
+                    logger.debug(
+                        "Loaded headerless EASYBANK CSV encoding=%s file=%s",
+                        enc,
+                        file_name,
+                    )
                     return df
                 except Exception:
                     continue
@@ -89,12 +116,20 @@ class Parser:
                     df = pd.read_csv(file_input, sep=sep, encoding=enc)
 
                     if any(col in df.columns for col in possible_amount_cols):
-                        print(f"Successfully loaded CSV with separator='{sep}' and encoding='{enc}'")
+                        logger.debug(
+                            "Loaded CSV separator=%r encoding=%s file=%s",
+                            sep,
+                            enc,
+                            file_name,
+                        )
                         return df
                 except Exception:
                     continue
 
-        print("Failed to parse CSV with standard separators and encodings.")
+        logger.warning(
+            "Could not parse CSV with standard separators and encodings: %s",
+            file_name,
+        )
         return None
 
     @staticmethod
@@ -116,7 +151,6 @@ class Parser:
         
         required = ['Date', 'Description', 'Amount']
         if not all(k in final_cols for k in required):
-            print(f"Missing essential columns in CSV. Found: {list(df.columns)}")
             return None
         return final_cols
 
@@ -228,7 +262,7 @@ class Parser:
                     'category': None
                 })
             except Exception as row_error:
-                print(f"Skipping row due to error: {row_error}")
+                logger.warning("Skipping row due to error: %s", row_error)
                 skipped['skipped_errors'] += 1
                 
         if include_report:
