@@ -21,6 +21,8 @@ from web.export_helpers import (
     listed_amount_sum,
     selected_expenses_for_export,
 )
+from web.receipts_routes import register_receipts_routes
+from web.receipts_state import ensure_receipts_dirs, receipts_dir
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -28,6 +30,7 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 def create_app() -> FastAPI:
     ensure_data_dirs()
+    ensure_receipts_dirs()
     app = FastAPI(title="Expense App Web", docs_url=None, redoc_url=None)
 
     static_dir = Path(__file__).resolve().parent / "static"
@@ -260,16 +263,7 @@ def create_app() -> FastAPI:
             },
         )
 
-    @app.get("/receipts", response_class=HTMLResponse)
-    async def receipts_stub(request: Request, _: AuthDep):
-        return templates.TemplateResponse(
-            request,
-            "receipts.html",
-            {
-                "title": "Belege",
-                "nav": "receipts",
-            },
-        )
+    register_receipts_routes(app, templates)
 
     @app.get("/health")
     async def health():
@@ -278,6 +272,7 @@ def create_app() -> FastAPI:
             "data_dir": str(data_root()),
             "rules_path": str(user_data_dir() / "rules.json"),
             "statements_dir": str(statements_dir()),
+            "receipts_dir": str(receipts_dir()),
         }
 
     # Eagerly build the store so the first request is warm.
