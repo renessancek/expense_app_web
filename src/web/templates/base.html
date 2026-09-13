@@ -65,8 +65,24 @@
       display: flex;
       flex-wrap: wrap;
       gap: 0.6rem 0.9rem;
-      align-items: end;
+      align-items: center;
       margin-bottom: 0.75rem;
+    }
+    .row > form {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem 0.9rem;
+      align-items: center;
+      margin: 0;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      justify-content: center;
+    }
+    .field > label {
+      margin-bottom: 0;
     }
     label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.2rem; }
     input[type=text], input[type=file], select, textarea {
@@ -86,10 +102,33 @@
       font: inherit;
       cursor: pointer;
       text-decoration: none;
-      display: inline-block;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 2.15rem;
+      white-space: nowrap;
     }
     button.secondary, .btn.secondary { background: #475569; }
     button.danger { background: var(--danger); }
+    .rule-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem 0.9rem;
+      align-items: center;
+      border-top: 1px solid var(--border);
+      padding: 0.75rem 0;
+    }
+    .rule-row .rule-name {
+      min-width: 7rem;
+      font-weight: 700;
+    }
+    .rule-row .field {
+      flex: 1;
+      min-width: 16rem;
+    }
+    .rule-row .field input {
+      width: 100%;
+    }
     table {
       width: 100%;
       border-collapse: collapse;
@@ -132,6 +171,6 @@
   <main>
     {% block content %}{% endblock %}
   </main>
-  <footer>Datenverzeichnis: EXPENSE_DATA_DIR · Desktop-App bleibt unverändert verfügbar.</footer>
+  <footer>Datenverzeichnis: EXPENSE_DATA_DIR</footer>
 </body>
 </html>
