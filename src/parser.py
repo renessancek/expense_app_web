@@ -73,15 +73,15 @@ class Parser:
 
     @staticmethod
     def _load_csv(file_input):
-        easybank_columns = [
+        bank_columns = [
             'Kontonummer', 'Buchungstext', 'Buchungsdatum',
             'Valutadatum', 'Betrag', 'Währung'
         ]
 
-        # EASYBANK exports may contain transaction rows without a header row.
-        # Identify them by filename and supply the bank's fixed column layout.
+        # Some bank exports contain transaction rows without a header row.
+        # Identify them by filename prefix "bank" and supply the fixed column layout.
         file_name = Parser._source_filename(file_input)
-        if file_name.upper().startswith('EASYBANK'):
+        if file_name.upper().startswith('BANK'):
             for enc in ['utf-8', 'latin-1', 'cp1252']:
                 try:
                     if hasattr(file_input, 'seek'):
@@ -92,10 +92,10 @@ class Parser:
                         sep=';',
                         encoding=enc,
                         header=None,
-                        names=easybank_columns,
+                        names=bank_columns,
                     )
                     logger.debug(
-                        "Loaded headerless EASYBANK CSV encoding=%s file=%s",
+                        "Loaded headerless bank CSV encoding=%s file=%s",
                         enc,
                         file_name,
                     )
