@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Auswertung</h1>
+  {% if message %}<div class="flash ok">{{ message }}</div>{% endif %}
+  {% if error %}<div class="flash err">{{ error }}</div>{% endif %}
+
+  <div class="card">
+    <h2>Kategorien</h2>
+    <p class="muted">Wähle die Kategorien für den Bericht (gleiche Vorauswahl wie zuvor beim Excel-Export).</p>
+    <form action="/auswertung" method="get">
+      <input type="hidden" name="submitted" value="1">
+      <div class="check-grid">
+        {% for c in categories %}
+        <label>
+          <input type="checkbox" name="categories" value="{{ c }}"
+            {% if c in selected_categories %}checked{% endif %}>
+          {{ c }}
+        </label>
+        {% else %}
+        <span class="muted">Keine Kategorien verfügbar.</span>
+        {% endfor %}
+      </div>
+      <button type="submit">Aktualisieren</button>
+    </form>
+  </div>
+
+  {% if not has_expenses %}
+  <div class="card">
+    <p class="muted">Keine Ausgaben für die Auswahl.</p>
+  </div>
+  {% else %}
+
+  {% for month in report.monthly_tables %}
+  <div class="card">
+    <h2>{{ month.title }}</h2>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>category</th>
+            <th class="num">amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in month.rows %}
+          <tr>
+            <td>{{ row.category }}</td>
+            <td class="num">{{ "%.2f"|format(row.amount) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endfor %}
+
+  <div class="card">
+    <h2>Monthly Totals</h2>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Month</th>
+            <th class="num">amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in report.monthly_totals.rows %}
+          <tr>
+            <td>{{ row.Month }}</td>
+            <td class="num">{{ "%.2f"|format(row.amount) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Average Monthly Expenses</h2>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>category</th>
+            <th class="num">average_per_month</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in report.average_monthly.rows %}
+          <tr>
+            <td>{{ row.category }}</td>
+            <td class="num">{{ "%.2f"|format(row.average_per_month) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Yearly Comparison</h2>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            {% for col in report.yearly_comparison.columns %}
+            <th{% if col != 'category' %} class="num"{% endif %}>{{ col }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in report.yearly_comparison.rows %}
+          <tr>
+            {% for col in report.yearly_comparison.columns %}
+            {% if col == 'category' %}
+            <td>{{ row[col] }}</td>
+            {% else %}
+            <td class="num">{{ "%.2f"|format(row[col]) }}</td>
+            {% endif %}
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Yearly Summary</h2>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Year</th>
+            <th>category</th>
+            <th class="num">amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in report.yearly_summary.rows %}
+          <tr>
+            <td>{{ row.Year }}</td>
+            <td>{{ row.category }}</td>
+            <td class="num">{{ "%.2f"|format(row.amount) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% endif %}
+
+  <div class="card">
+    <h2>Configured Categories</h2>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>category</th>
+            <th>keywords</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in report.configured_categories.rows %}
+          <tr>
+            <td>{{ row.category }}</td>
+            <td>{{ row.keywords }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="2" class="muted">Keine Regeln konfiguriert.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}
