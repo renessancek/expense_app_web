@@ -7,19 +7,19 @@ import tempfile
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import FastAPI, File, Form, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi import FastAPI, File, Form, Query, Request, UploadFile
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app_paths import statements_dir, user_data_dir
 from web.deps import AuthDep, StoreDep, data_root, ensure_data_dirs, get_store
 from web.export_helpers import (
+    build_yearly_statistics_report,
     category_totals,
     default_export_selected,
     listed_amount_sum,
     selected_expenses_for_export,
-    write_yearly_statistics_export,
 )
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
@@ -216,60 +216,47 @@ def create_app() -> FastAPI:
         param = "message" if success else "error"
         return RedirectResponse(f"/rules?{param}={quote(message)}", status_code=303)
 
-    @app.get("/stats", response_class=HTMLResponse)
-    async def stats_page(
+    @app.get("/stats")
+    async def stats_redirect(_: AuthDep):
+        return RedirectResponse("/auswertung", status_code=302)
+
+    @app.get("/auswertung", response_class=HTMLResponse)
+    async def auswertung_page(
         request: Request,
         _: AuthDep,
         store: StoreDep,
+        categories: list[str] = Query(default=[]),
+        submitted: str = "",
         message: str = "",
         error: str = "",
     ):
         totals = category_totals(store.dataframe)
-        categories = (
+        all_categories = (
             sorted((str(c) for c in totals["Category"]), key=str.casefold)
             if not totals.empty
             else []
         )
-        rows = totals.to_dict(orient="records") if not totals.empty else []
+        if submitted:
+            selected = [c for c in categories if c in all_categories]
+        else:
+            selected = [c for c in all_categories if default_export_selected(c)]
+
+        expenses = selected_expenses_for_export(store.dataframe, selected)
+        report = build_yearly_statistics_report(expenses, store.categorizer.rules)
+        has_expenses = not expenses.empty
+
         return templates.TemplateResponse(
             request,
-            "stats.html",
+            "auswertung.html",
             {
-                "title": "Kategoriesummen",
-                "rows": rows,
-                "categories": categories,
-                "default_selected": {c: default_export_selected(c) for c in categories},
+                "title": "Auswertung",
+                "categories": all_categories,
+                "selected_categories": selected,
+                "report": report,
+                "has_expenses": has_expenses,
                 "message": message,
                 "error": error,
-                "nav": "stats",
-            },
-        )
-
-    @app.post("/stats/export")
-    async def stats_export(
-        _: AuthDep,
-        store: StoreDep,
-        categories: list[str] = Form(default=[]),
-    ):
-        if not categories:
-            return RedirectResponse(
-                f"/stats?error={quote('Mindestens eine Kategorie auswählen.')}",
-                status_code=303,
-            )
-        expenses = selected_expenses_for_export(store.dataframe, categories)
-        if expenses.empty:
-            return RedirectResponse(
-                f"/stats?error={quote('Keine Ausgaben für die Auswahl.')}",
-                status_code=303,
-            )
-        payload = write_yearly_statistics_export(
-            expenses, categories, store.categorizer.rules
-        )
-        return Response(
-            content=payload,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={
-                "Content-Disposition": 'attachment; filename="yearly_expense_report.xlsx"'
+                "nav": "auswertung",
             },
         )
 
