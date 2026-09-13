@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Beleg: {{ file_name }}</h1>
+  <p><a href="/receipts">&larr; Zurück zu Belege</a></p>
+
+  <div class="card">
+    <h2>Status</h2>
+    <p class="{% if row.status == 'Extracted' %}status-ok{% else %}status-bad{% endif %}">
+      {{ row.status|status_de }}
+    </p>
+    {% if row.error %}
+    <p class="flash err">{{ row.error }}</p>
+    {% endif %}
+    <p class="muted"><code>{{ path }}</code></p>
+  </div>
+
+  <div class="card">
+    <h2>Übersicht</h2>
+    <table>
+      <tbody>
+        <tr><th>Händler</th><td>{{ result.merchant or "—" }}</td></tr>
+        <tr><th>Datum</th><td>{{ result.date|date_de or "—" }}</td></tr>
+        <tr><th>Summe</th><td>{% if result.total is not none %}{{ result.total|total_de }}{% else %}—{% endif %}</td></tr>
+        <tr><th>Zwischensumme</th><td>{% if result.subtotal is not none %}{{ result.subtotal|total_de }}{% else %}—{% endif %}</td></tr>
+        <tr><th>MwSt</th><td>{% if result.tax is not none %}{{ result.tax|total_de }}{% else %}—{% endif %}</td></tr>
+        <tr><th>Kategorie (Händler)</th><td>{{ result.merchant_category or "—" }}</td></tr>
+        <tr><th>Hinweise</th><td class="muted">{{ result.notes or row.error or "—" }}</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Positionen ({{ items|length }})</h2>
+    {% if items %}
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Beschreibung</th>
+            <th class="num">Menge</th>
+            <th class="num">Betrag</th>
+            <th>Kategorie</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+          <tr>
+            <td>{{ item.description }}</td>
+            <td class="num">{{ item.quantity }}</td>
+            <td class="num">{% if item.amount is not none %}{{ "%.2f"|format(item.amount) }} €{% else %}—{% endif %}</td>
+            <td>{{ item.category or "—" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="muted">Keine Positionen erkannt.</p>
+    {% endif %}
+  </div>
+
+  {% if result.raw_text %}
+  <div class="card">
+    <h2>Rohtext</h2>
+    <details>
+      <summary>Rohtext anzeigen</summary>
+      <pre style="white-space: pre-wrap; font-size: 0.85rem;">{{ result.raw_text }}</pre>
+    </details>
+  </div>
+  {% endif %}
+{% endblock %}
