@@ -7,8 +7,8 @@
     <h2>CSV importieren / Ordner scannen</h2>
     <p class="muted">Scan-Ordner: <code>{{ statements_path }}</code></p>
     <div class="row">
-      <form action="/upload" method="post" enctype="multipart/form-data" class="row">
-        <div>
+      <form action="/upload" method="post" enctype="multipart/form-data">
+        <div class="field">
           <label for="file">CSV-Datei</label>
           <input id="file" type="file" name="file" accept=".csv,text/csv" required>
         </div>
@@ -23,7 +23,7 @@
   <div class="card">
     <h2>Filter</h2>
     <form method="get" action="/" class="row">
-      <div>
+      <div class="field">
         <label for="category">Kategorie</label>
         <select id="category" name="category">
           {% for c in categories %}
@@ -31,7 +31,7 @@
           {% endfor %}
         </select>
       </div>
-      <div>
+      <div class="field">
         <label for="month">Monat</label>
         <select id="month" name="month">
           {% for m in months %}
@@ -39,7 +39,7 @@
           {% endfor %}
         </select>
       </div>
-      <div>
+      <div class="field">
         <label for="q">Suche</label>
         <input id="q" type="text" name="q" value="{{ q }}" placeholder="Beschreibung…">
       </div>
