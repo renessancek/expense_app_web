@@ -14,6 +14,7 @@
       --border: #d7dee5;
       --danger: #b91c1c;
       --ok: #166534;
+      --control-height: 2.15rem;
     }
     * { box-sizing: border-box; }
     body {
@@ -61,28 +62,30 @@
     .flash.ok { background: #dcfce7; color: var(--ok); }
     .flash.err { background: #fee2e2; color: var(--danger); }
     form.inline { display: inline; }
+    /* Bottom-align so buttons line up with inputs, not with labels above them */
     .row {
       display: flex;
       flex-wrap: wrap;
       gap: 0.6rem 0.9rem;
-      align-items: center;
+      align-items: flex-end;
       margin-bottom: 0.75rem;
     }
     .row > form {
       display: flex;
       flex-wrap: wrap;
       gap: 0.6rem 0.9rem;
-      align-items: center;
+      align-items: flex-end;
       margin: 0;
     }
     .field {
       display: flex;
       flex-direction: column;
       gap: 0.2rem;
-      justify-content: center;
+      justify-content: flex-end;
     }
     .field > label {
       margin-bottom: 0;
+      min-height: 1.1em;
     }
     label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.2rem; }
     input[type=text], input[type=file], select, textarea {
@@ -91,6 +94,7 @@
       border-radius: 6px;
       font: inherit;
       min-width: 10rem;
+      min-height: var(--control-height);
       background: #fff;
     }
     button, .btn {
@@ -105,7 +109,7 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      height: 2.15rem;
+      height: var(--control-height);
       white-space: nowrap;
     }
     button.secondary, .btn.secondary { background: #475569; }
@@ -114,13 +118,16 @@
       display: flex;
       flex-wrap: wrap;
       gap: 0.6rem 0.9rem;
-      align-items: center;
+      align-items: flex-end;
       border-top: 1px solid var(--border);
       padding: 0.75rem 0;
     }
     .rule-row .rule-name {
       min-width: 7rem;
       font-weight: 700;
+      display: flex;
+      align-items: center;
+      height: var(--control-height);
     }
     .rule-row .field {
       flex: 1;
