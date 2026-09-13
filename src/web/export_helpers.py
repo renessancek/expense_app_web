@@ -1,4 +1,4 @@
-"""Category totals and yearly statistics report helpers (parity with the desktop app)."""
+"""Category totals and yearly statistics report helpers."""
 
 from __future__ import annotations
 
@@ -67,32 +67,12 @@ def _table(df: pd.DataFrame) -> dict:
     return {"columns": columns, "rows": rows}
 
 
-def _configured_categories_table(rules: list[dict]) -> dict:
-    configured: dict[str, set[str]] = {}
-    for rule in rules:
-        category = rule.get("category")
-        if category:
-            configured.setdefault(category, set()).update(rule.get("keywords", []))
-    configured_categories = pd.DataFrame(
-        [
-            {"category": category, "keywords": ", ".join(sorted(keywords))}
-            for category, keywords in sorted(
-                configured.items(), key=lambda item: item[0].casefold()
-            )
-        ],
-        columns=["category", "keywords"],
-    )
-    return _table(configured_categories)
-
-
-def build_yearly_statistics_report(expenses: pd.DataFrame, rules: list[dict]) -> dict:
+def build_yearly_statistics_report(expenses: pd.DataFrame) -> dict:
     """Build the multi-section annual report as HTML-ready structures.
 
-    Mirrors the former Excel sheets from write_yearly_statistics_export:
-    per-month tables, Monthly Totals, Average Monthly Expenses, Yearly Comparison,
-    Yearly Summary, and Configured Categories.
+    Sections: per-month tables, Monthly Totals, Average Monthly Expenses,
+    Yearly Comparison, Yearly Summary. (Configured Categories live under Regeln.)
     """
-    configured = _configured_categories_table(rules)
     empty_monthly_totals = {"columns": ["Month", "amount"], "rows": []}
     empty_averages = {"columns": ["category", "average_per_month"], "rows": []}
     empty_comparison = {"columns": ["category"], "rows": []}
@@ -105,7 +85,6 @@ def build_yearly_statistics_report(expenses: pd.DataFrame, rules: list[dict]) ->
             "average_monthly": empty_averages,
             "yearly_comparison": empty_comparison,
             "yearly_summary": empty_yearly,
-            "configured_categories": configured,
         }
 
     monthly_tables: list[dict] = []
@@ -167,7 +146,6 @@ def build_yearly_statistics_report(expenses: pd.DataFrame, rules: list[dict]) ->
         "average_monthly": average_table,
         "yearly_comparison": comparison_table,
         "yearly_summary": yearly_summary_table,
-        "configured_categories": configured,
     }
 
 

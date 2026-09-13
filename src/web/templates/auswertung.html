@@ -6,7 +6,7 @@
 
   <div class="card">
     <h2>Kategorien</h2>
-    <p class="muted">Wähle die Kategorien für den Bericht (gleiche Vorauswahl wie zuvor beim Excel-Export).</p>
+    <p class="muted">Wähle die Kategorien für den Bericht.</p>
     <form action="/auswertung" method="get">
       <input type="hidden" name="submitted" value="1">
       <div class="check-grid">
@@ -151,28 +151,4 @@
   </div>
 
   {% endif %}
-
-  <div class="card">
-    <h2>Configured Categories</h2>
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>category</th>
-            <th>keywords</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in report.configured_categories.rows %}
-          <tr>
-            <td>{{ row.category }}</td>
-            <td>{{ row.keywords }}</td>
-          </tr>
-          {% else %}
-          <tr><td colspan="2" class="muted">Keine Regeln konfiguriert.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
 {% endblock %}
