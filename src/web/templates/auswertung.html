@@ -5,23 +5,27 @@
   {% if error %}<div class="flash err">{{ error }}</div>{% endif %}
 
   <div class="card">
-    <h2>Kategorien</h2>
-    <p class="muted">Wähle die Kategorien für den Bericht.</p>
-    <form action="/auswertung" method="get">
-      <input type="hidden" name="submitted" value="1">
-      <div class="check-grid">
-        {% for c in categories %}
-        <label>
-          <input type="checkbox" name="categories" value="{{ c }}"
-            {% if c in selected_categories %}checked{% endif %}>
-          {{ c }}
-        </label>
-        {% else %}
-        <span class="muted">Keine Kategorien verfügbar.</span>
-        {% endfor %}
-      </div>
-      <button type="submit">Aktualisieren</button>
-    </form>
+    <details class="collapse">
+      <summary>
+        <h2>Kategorien{% if selected_categories %} ({{ selected_categories|length }}/{{ categories|length }}){% endif %}</h2>
+      </summary>
+      <p class="muted">Wähle die Kategorien für den Bericht.</p>
+      <form action="/auswertung" method="get">
+        <input type="hidden" name="submitted" value="1">
+        <div class="check-grid">
+          {% for c in categories %}
+          <label>
+            <input type="checkbox" name="categories" value="{{ c }}"
+              {% if c in selected_categories %}checked{% endif %}>
+            {{ c }}
+          </label>
+          {% else %}
+          <span class="muted">Keine Kategorien verfügbar.</span>
+          {% endfor %}
+        </div>
+        <button type="submit">Aktualisieren</button>
+      </form>
+    </details>
   </div>
 
   {% if not has_expenses %}
@@ -30,67 +34,95 @@
   </div>
   {% else %}
 
-  {% for month in report.monthly_tables %}
+  {% for year_block in report.years %}
   <div class="card">
-    <h2>{{ month.title }}</h2>
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>category</th>
-            <th class="num">amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in month.rows %}
-          <tr>
-            <td>{{ row.category }}</td>
-            <td class="num">{{ "%.2f"|format(row.amount) }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+    <details class="collapse">
+      <summary>
+        <h2>{{ year_block.year }}</h2>
+      </summary>
+
+      {% for month in year_block.monthly_tables %}
+      <h3 class="section-sub">{{ month.title }}</h3>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Kategorie</th>
+              <th class="num">Betrag</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in month.rows %}
+            <tr{% if row.category == 'Summe' %} class="row-total"{% endif %}>
+              <td>{{ row.category }}</td>
+              <td class="num">{{ "%.2f"|format(row.amount) }} €</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endfor %}
+
+      <h3 class="section-sub">Monatssummen {{ year_block.year }}</h3>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Monat</th>
+              <th class="num">Betrag</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in year_block.monthly_totals.rows %}
+            <tr{% if row.Month == 'Summe' %} class="row-total"{% endif %}>
+              <td>{{ row.Month }}</td>
+              <td class="num">{{ "%.2f"|format(row.amount) }} €</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="section-sub">Jahresübersicht {{ year_block.year }}</h3>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Jahr</th>
+              <th>Kategorie</th>
+              <th class="num">Betrag</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in year_block.yearly_summary.rows %}
+            <tr{% if row.category == 'Summe' %} class="row-total"{% endif %}>
+              <td>{{ row.Year }}</td>
+              <td>{{ row.category }}</td>
+              <td class="num">{{ "%.2f"|format(row.amount) }} €</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
   </div>
   {% endfor %}
 
   <div class="card">
-    <h2>Monthly Totals</h2>
+    <h2>Durchschnittliche monatliche Ausgaben</h2>
     <div class="table-scroll">
       <table>
         <thead>
           <tr>
-            <th>Month</th>
-            <th class="num">amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in report.monthly_totals.rows %}
-          <tr>
-            <td>{{ row.Month }}</td>
-            <td class="num">{{ "%.2f"|format(row.amount) }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>Average Monthly Expenses</h2>
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>category</th>
-            <th class="num">average_per_month</th>
+            <th>Kategorie</th>
+            <th class="num">Durchschnitt/Monat</th>
           </tr>
         </thead>
         <tbody>
           {% for row in report.average_monthly.rows %}
           <tr>
             <td>{{ row.category }}</td>
-            <td class="num">{{ "%.2f"|format(row.average_per_month) }}</td>
+            <td class="num">{{ "%.2f"|format(row.average_per_month) }} €</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -99,50 +131,28 @@
   </div>
 
   <div class="card">
-    <h2>Yearly Comparison</h2>
+    <h2>Jahresvergleich</h2>
     <div class="table-scroll">
       <table>
         <thead>
           <tr>
             {% for col in report.yearly_comparison.columns %}
-            <th{% if col != 'category' %} class="num"{% endif %}>{{ col }}</th>
+            <th{% if col != 'category' %} class="num"{% endif %}>
+              {% if col == 'category' %}Kategorie{% else %}{{ col }}{% endif %}
+            </th>
             {% endfor %}
           </tr>
         </thead>
         <tbody>
           {% for row in report.yearly_comparison.rows %}
-          <tr>
+          <tr{% if row.category == 'Summe' %} class="row-total"{% endif %}>
             {% for col in report.yearly_comparison.columns %}
             {% if col == 'category' %}
             <td>{{ row[col] }}</td>
             {% else %}
-            <td class="num">{{ "%.2f"|format(row[col]) }}</td>
+            <td class="num">{{ "%.2f"|format(row[col]) }} €</td>
             {% endif %}
             {% endfor %}
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>Yearly Summary</h2>
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Year</th>
-            <th>category</th>
-            <th class="num">amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in report.yearly_summary.rows %}
-          <tr>
-            <td>{{ row.Year }}</td>
-            <td>{{ row.category }}</td>
-            <td class="num">{{ "%.2f"|format(row.amount) }}</td>
           </tr>
           {% endfor %}
         </tbody>
