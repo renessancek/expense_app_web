@@ -10,6 +10,8 @@ DEFAULT_UNSELECTED_CATEGORIES = {"Abhebung", "Investments", "Firma", "Privat", "
 # Backward-compatible alias
 DEFAULT_UNSELECTED_EXPORT_CATEGORIES = DEFAULT_UNSELECTED_CATEGORIES
 
+TOTAL_LABEL = "Summe"
+
 
 def listed_amount_sum(frame: pd.DataFrame | None) -> float:
     """Return the numeric sum of amounts in a filtered transaction list."""
@@ -67,51 +69,78 @@ def _table(df: pd.DataFrame) -> dict:
     return {"columns": columns, "rows": rows}
 
 
+def _month_table(expenses: pd.DataFrame, month: str) -> dict:
+    summary = (
+        expenses[expenses["Month"] == month]
+        .groupby("category", as_index=False)["amount"]
+        .sum()
+        .sort_values("amount", ascending=False)
+    )
+    total = pd.DataFrame([{"category": TOTAL_LABEL, "amount": summary["amount"].sum()}])
+    return {
+        "title": str(month),
+        **_table(pd.concat([summary, total], ignore_index=True)),
+    }
+
+
+def _monthly_totals_for_year(year_expenses: pd.DataFrame) -> dict:
+    monthly_totals = (
+        year_expenses.groupby("Month", as_index=False)["amount"]
+        .sum()
+        .sort_values("Month", ascending=False)
+    )
+    total = pd.DataFrame(
+        [{"Month": TOTAL_LABEL, "amount": monthly_totals["amount"].sum()}]
+    )
+    return _table(pd.concat([monthly_totals, total], ignore_index=True))
+
+
+def _yearly_summary_for_year(year_expenses: pd.DataFrame, year: int) -> dict:
+    summary = (
+        year_expenses.groupby("category", as_index=False)["amount"]
+        .sum()
+        .sort_values("amount", ascending=False)
+    )
+    summary.insert(0, "Year", year)
+    total = pd.DataFrame(
+        [{"Year": year, "category": TOTAL_LABEL, "amount": summary["amount"].sum()}]
+    )
+    return _table(pd.concat([summary, total], ignore_index=True))
+
+
 def build_yearly_statistics_report(expenses: pd.DataFrame) -> dict:
     """Build the multi-section annual report as HTML-ready structures.
 
-    Sections: per-month tables, Monthly Totals, Average Monthly Expenses,
-    Yearly Comparison, Yearly Summary. (Configured Categories live under Regeln.)
+    Years are newest-first. Each year carries its month tables (newest first),
+    monthly totals, and category summary. Global sections: average monthly
+    expenses and yearly comparison. (Configured Categories live under Regeln.)
     """
-    empty_monthly_totals = {"columns": ["Month", "amount"], "rows": []}
     empty_averages = {"columns": ["category", "average_per_month"], "rows": []}
     empty_comparison = {"columns": ["category"], "rows": []}
-    empty_yearly = {"columns": ["Year", "category", "amount"], "rows": []}
 
     if expenses is None or getattr(expenses, "empty", True):
         return {
-            "monthly_tables": [],
-            "monthly_totals": empty_monthly_totals,
+            "years": [],
             "average_monthly": empty_averages,
             "yearly_comparison": empty_comparison,
-            "yearly_summary": empty_yearly,
         }
 
-    monthly_tables: list[dict] = []
-    for month in sorted(expenses["Month"].unique()):
-        summary = (
-            expenses[expenses["Month"] == month]
-            .groupby("category", as_index=False)["amount"]
-            .sum()
-            .sort_values("amount", ascending=False)
-        )
-        total = pd.DataFrame([{"category": "TOTAL", "amount": summary["amount"].sum()}])
-        monthly_tables.append(
+    years_out: list[dict] = []
+    for year in sorted(expenses["Year"].unique(), reverse=True):
+        year_expenses = expenses[expenses["Year"] == year]
+        months = sorted(year_expenses["Month"].unique(), reverse=True)
+        years_out.append(
             {
-                "title": str(month),
-                **_table(pd.concat([summary, total], ignore_index=True)),
+                "year": int(year),
+                "monthly_tables": [_month_table(year_expenses, m) for m in months],
+                "monthly_totals": _monthly_totals_for_year(year_expenses),
+                "yearly_summary": _yearly_summary_for_year(year_expenses, int(year)),
             }
         )
 
-    monthly_totals = expenses.groupby("Month", as_index=False)["amount"].sum().sort_values("Month")
-    monthly_total = pd.DataFrame(
-        [{"Month": "GRAND TOTAL", "amount": monthly_totals["amount"].sum()}]
-    )
-    monthly_totals_table = _table(pd.concat([monthly_totals, monthly_total], ignore_index=True))
-
-    months = expenses["Month"].nunique()
+    months_count = expenses["Month"].nunique()
     averages = expenses.groupby("category", as_index=False)["amount"].sum()
-    averages["average_per_month"] = (averages["amount"] / months).round(2)
+    averages["average_per_month"] = (averages["amount"] / months_count).round(2)
     averages = averages[["category", "average_per_month"]].sort_values(
         "average_per_month", ascending=False
     )
@@ -124,28 +153,16 @@ def build_yearly_statistics_report(expenses: pd.DataFrame) -> dict:
     comparison["_total"] = comparison[year_columns].sum(axis=1)
     comparison = comparison.sort_values("_total", ascending=False).drop(columns="_total")
     comparison_total = pd.DataFrame(
-        [{**{"category": "TOTAL"}, **comparison[year_columns].sum().to_dict()}]
+        [{**{"category": TOTAL_LABEL}, **comparison[year_columns].sum().to_dict()}]
     )
     comparison = pd.concat([comparison, comparison_total], ignore_index=True)
     comparison.columns = [str(c) for c in comparison.columns]
     comparison_table = _table(comparison)
 
-    yearly_summary = (
-        expenses.groupby(["Year", "category"], as_index=False)["amount"]
-        .sum()
-        .sort_values(["Year", "amount"], ascending=[False, False])
-    )
-    yearly_total = pd.DataFrame(
-        [{"Year": "GRAND TOTAL", "category": "-", "amount": yearly_summary["amount"].sum()}]
-    )
-    yearly_summary_table = _table(pd.concat([yearly_summary, yearly_total], ignore_index=True))
-
     return {
-        "monthly_tables": monthly_tables,
-        "monthly_totals": monthly_totals_table,
+        "years": years_out,
         "average_monthly": average_table,
         "yearly_comparison": comparison_table,
-        "yearly_summary": yearly_summary_table,
     }
 
 
