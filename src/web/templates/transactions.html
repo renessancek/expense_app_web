@@ -74,10 +74,10 @@
 
   <div class="card">
     <h2>Filter</h2>
-    <form method="get" action="/" class="row">
+    <form id="filter-form" method="get" action="/" class="row">
       <div class="field">
         <label for="category">Kategorie</label>
-        <select id="category" name="category">
+        <select id="category" name="category" onchange="this.form.submit()">
           {% for c in categories %}
           <option value="{{ c }}" {% if c == category %}selected{% endif %}>{{ c }}</option>
           {% endfor %}
@@ -85,7 +85,7 @@
       </div>
       <div class="field">
         <label for="month">Monat</label>
-        <select id="month" name="month">
+        <select id="month" name="month" onchange="this.form.submit()">
           {% for m in months %}
           <option value="{{ m }}" {% if m == month %}selected{% endif %}>{{ m }}</option>
           {% endfor %}
@@ -93,11 +93,7 @@
       </div>
       <div class="field">
         <label for="q">Suche</label>
-        <input id="q" type="text" name="q" value="{{ q }}" placeholder="Beschreibung…">
-      </div>
-      <div class="field">
-        <label class="label-spacer" for="filter-submit">&nbsp;</label>
-        <button id="filter-submit" type="submit">Filtern</button>
+        <input id="q" type="text" name="q" value="{{ q }}" placeholder="Beschreibung…" autocomplete="off">
       </div>
       <div class="field">
         <label class="label-spacer">&nbsp;</label>
@@ -134,4 +130,16 @@
     </table>
     <p><strong>Summe der angezeigten Transaktionen: {{ "%.2f"|format(listed_sum) }} €</strong></p>
   </div>
+  <script>
+    (function () {
+      var form = document.getElementById("filter-form");
+      var search = document.getElementById("q");
+      if (!form || !search) return;
+      var timer = null;
+      search.addEventListener("input", function () {
+        clearTimeout(timer);
+        timer = setTimeout(function () { form.submit(); }, 300);
+      });
+    })();
+  </script>
 {% endblock %}
