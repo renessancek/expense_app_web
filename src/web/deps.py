@@ -47,7 +47,6 @@ def ensure_data_dirs() -> None:
     root = data_root()
     root.mkdir(parents=True, exist_ok=True)
     statements_dir().mkdir(parents=True, exist_ok=True)
-    (root / "uploads").mkdir(parents=True, exist_ok=True)
     receipts = root / "receipts"
     receipts.mkdir(parents=True, exist_ok=True)
     (receipts / "uploads").mkdir(parents=True, exist_ok=True)
