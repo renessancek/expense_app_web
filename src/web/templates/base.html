@@ -53,6 +53,12 @@
     }
     h1 { font-size: 1.35rem; margin: 0 0 0.75rem; }
     h2 { font-size: 1.05rem; margin: 0 0 0.6rem; }
+    h3.section-sub {
+      font-size: 0.95rem;
+      margin: 1rem 0 0.45rem;
+      color: var(--text);
+    }
+    h3.section-sub:first-of-type { margin-top: 0.25rem; }
     .muted { color: var(--muted); font-size: 0.9rem; }
     .flash {
       padding: 0.65rem 0.8rem;
@@ -129,7 +135,7 @@
       user-select: none;
       pointer-events: none;
     }
-    input[type=text], input[type=file], select, textarea {
+    input[type=text], input[type=file], select {
       padding: 0.4rem 0.55rem;
       border: 1px solid var(--border);
       border-radius: 6px;
@@ -137,6 +143,18 @@
       min-width: 10rem;
       height: var(--control-height);
       background: #fff;
+    }
+    textarea {
+      padding: 0.4rem 0.55rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font: inherit;
+      min-width: 10rem;
+      min-height: 4.5rem;
+      height: auto;
+      resize: vertical;
+      background: #fff;
+      line-height: 1.35;
     }
     input[type=file] {
       padding: 0.3rem 0.4rem;
@@ -163,17 +181,19 @@
       font-weight: 700;
       display: flex;
       align-items: center;
-      height: var(--control-height);
+      min-height: var(--control-height);
     }
     .rule-row .field.grow {
       flex: 1;
       min-width: 16rem;
     }
-    .rule-row .field.grow input {
+    .rule-row .field.grow input,
+    .rule-row .field.grow textarea {
       width: 100%;
     }
     .table-scroll { overflow-x: auto; }
     tr.row-warn td { background: #fef2f2; }
+    tr.row-total td { font-weight: 700; border-top: 1px solid var(--border); }
     .status-ok { color: var(--ok); font-weight: 600; }
     .status-bad { color: var(--danger); font-weight: 600; }
     table {
