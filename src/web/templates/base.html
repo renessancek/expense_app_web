@@ -63,6 +63,32 @@
     .flash.ok { background: #dcfce7; color: var(--ok); }
     .flash.err { background: #fee2e2; color: var(--danger); }
     form.inline { display: inline; }
+    details.collapse > summary {
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      user-select: none;
+    }
+    details.collapse > summary::-webkit-details-marker { display: none; }
+    details.collapse > summary::before {
+      content: "▸";
+      color: var(--muted);
+      font-size: 0.85rem;
+      line-height: 1;
+      transition: transform 0.12s ease;
+    }
+    details.collapse[open] > summary::before {
+      transform: rotate(90deg);
+    }
+    details.collapse > summary h2 {
+      margin: 0;
+      font-size: 1.05rem;
+    }
+    details.collapse[open] > summary {
+      margin-bottom: 0.6rem;
+    }
     /* Same structure for fields and actions (label + control) so they share one baseline */
     .row,
     .rule-row {
