@@ -27,45 +27,49 @@
   </div>
 
   <div class="card">
-    <h2>Importierte Dateien ({{ import_reports|length }})</h2>
-    {% if import_reports %}
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Datei</th>
-            <th>Status</th>
-            <th class="num">Zeilen</th>
-            <th class="num">Importiert</th>
-            <th class="num">Einnahmen</th>
-            <th class="num">Unvollständig</th>
-            <th class="num">Ausgeschlossen</th>
-            <th class="num">Fehler</th>
-            <th>Details</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for report in import_reports %}
-          <tr class="{% if report.status != 'Imported' %}row-warn{% endif %}">
-            <td>{{ report.File }}</td>
-            <td class="{% if report.status == 'Imported' %}status-ok{% else %}status-bad{% endif %}">
-              {% if report.status == 'Imported' %}Importiert{% else %}Nicht importiert{% endif %}
-            </td>
-            <td class="num">{{ report.rows_read }}</td>
-            <td class="num">{{ report.imported_expenses }}</td>
-            <td class="num">{{ report.skipped_non_expenses }}</td>
-            <td class="num">{{ report.skipped_missing_data }}</td>
-            <td class="num">{{ report.skipped_excluded }}</td>
-            <td class="num">{{ report.skipped_errors }}</td>
-            <td class="muted">{{ report.details }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% else %}
-    <p class="muted">Noch keine Dateien geladen. CSV hochladen oder den Ordner scannen.</p>
-    {% endif %}
+    <details class="collapse">
+      <summary>
+        <h2>Importierte Dateien ({{ import_reports|length }})</h2>
+      </summary>
+      {% if import_reports %}
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Datei</th>
+              <th>Status</th>
+              <th class="num">Zeilen</th>
+              <th class="num">Importiert</th>
+              <th class="num">Einnahmen</th>
+              <th class="num">Unvollständig</th>
+              <th class="num">Ausgeschlossen</th>
+              <th class="num">Fehler</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for report in import_reports %}
+            <tr class="{% if report.status != 'Imported' %}row-warn{% endif %}">
+              <td>{{ report.File }}</td>
+              <td class="{% if report.status == 'Imported' %}status-ok{% else %}status-bad{% endif %}">
+                {% if report.status == 'Imported' %}Importiert{% else %}Nicht importiert{% endif %}
+              </td>
+              <td class="num">{{ report.rows_read }}</td>
+              <td class="num">{{ report.imported_expenses }}</td>
+              <td class="num">{{ report.skipped_non_expenses }}</td>
+              <td class="num">{{ report.skipped_missing_data }}</td>
+              <td class="num">{{ report.skipped_excluded }}</td>
+              <td class="num">{{ report.skipped_errors }}</td>
+              <td class="muted">{{ report.details }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="muted">Noch keine Dateien geladen. CSV hochladen oder den Ordner scannen.</p>
+      {% endif %}
+    </details>
   </div>
 
   <div class="card">
