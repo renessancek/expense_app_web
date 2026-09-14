@@ -18,10 +18,16 @@
           <label for="files">Bilder / PDFs</label>
           <input id="files" type="file" name="files" accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,image/*,application/pdf" multiple required>
         </div>
-        <button type="submit">Hochladen</button>
+        <div class="field">
+          <label class="label-spacer" for="receipt-upload-submit">&nbsp;</label>
+          <button id="receipt-upload-submit" type="submit">Hochladen</button>
+        </div>
       </form>
       <form action="/receipts/scan" method="post">
-        <button type="submit" class="secondary">Ordner scannen</button>
+        <div class="field">
+          <label class="label-spacer" for="receipt-scan-submit">&nbsp;</label>
+          <button id="receipt-scan-submit" type="submit" class="secondary">Ordner scannen</button>
+        </div>
       </form>
     </div>
   </div>
