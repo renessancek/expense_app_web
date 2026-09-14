@@ -12,8 +12,8 @@
         <input id="category" type="text" name="category" required>
       </div>
       <div class="field" style="flex:1; min-width:16rem;">
-        <label for="keywords">Stichwörter (kommagetrennt)</label>
-        <input id="keywords" type="text" name="keywords" required style="width:100%;">
+        <label for="keywords">Stichwörter (kommagetrennt, auch zeilenweise)</label>
+        <textarea id="keywords" name="keywords" rows="3" required style="width:100%;"></textarea>
       </div>
       <div class="field">
         <label class="label-spacer" for="add-submit">&nbsp;</label>
@@ -56,7 +56,7 @@
         <input type="hidden" name="category" value="{{ rule.category }}">
         <div class="field grow">
           <label for="kw-{{ loop.index }}">Stichwörter</label>
-          <input id="kw-{{ loop.index }}" type="text" name="keywords" value="{{ rule.keywords|join(', ') }}">
+          <textarea id="kw-{{ loop.index }}" name="keywords" rows="3">{{ rule.keywords|join(', ') }}</textarea>
         </div>
         <div class="field">
           <label class="label-spacer" for="upd-{{ loop.index }}">&nbsp;</label>
