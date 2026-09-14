@@ -86,14 +86,14 @@ def create_app() -> FastAPI:
                 "/?message=Nur+CSV-Dateien+werden+unterst%C3%BCtzt.",
                 status_code=303,
             )
-        upload_dir = data_root() / "uploads"
+        # Persist into BankStatements so "Ordner scannen" picks the file up too.
+        upload_dir = statements_dir()
         upload_dir.mkdir(parents=True, exist_ok=True)
         safe_name = Path(file.filename).name
         target = upload_dir / safe_name
         content = await file.read()
         target.write_bytes(content)
-        selected = list(store.selected_files) + [str(target)]
-        store.reload(selected_files=selected)
+        store.reload()
         return RedirectResponse(
             f"/?message=Importiert%3A+{safe_name}",
             status_code=303,
