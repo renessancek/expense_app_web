@@ -15,6 +15,7 @@
       --danger: #b91c1c;
       --ok: #166534;
       --control-height: 2.15rem;
+      --label-height: 1.1em;
     }
     * { box-sizing: border-box; }
     body {
@@ -62,47 +63,64 @@
     .flash.ok { background: #dcfce7; color: var(--ok); }
     .flash.err { background: #fee2e2; color: var(--danger); }
     form.inline { display: inline; }
-    /* Bottom-align so buttons line up with inputs, not with labels above them */
-    .row {
+    /* Same structure for fields and actions (label + control) so they share one baseline */
+    .row,
+    .rule-row {
       display: flex;
       flex-wrap: wrap;
       gap: 0.6rem 0.9rem;
-      align-items: flex-end;
+      align-items: flex-start;
       margin-bottom: 0.75rem;
     }
-    .row > form {
+    .rule-row {
+      border-top: 1px solid var(--border);
+      padding: 0.75rem 0;
+      margin-bottom: 0;
+    }
+    .row > form,
+    .rule-row > form {
       display: flex;
       flex-wrap: wrap;
       gap: 0.6rem 0.9rem;
-      align-items: flex-end;
+      align-items: flex-start;
       margin: 0;
     }
     .field {
       display: flex;
       flex-direction: column;
-      gap: 0.2rem;
-      justify-content: flex-end;
+      gap: 0.25rem;
     }
-    .field > label {
-      margin-bottom: 0;
-      min-height: 1.1em;
+    label {
+      display: block;
+      font-size: 0.8rem;
+      line-height: var(--label-height);
+      min-height: var(--label-height);
+      color: var(--muted);
+      margin: 0;
     }
-    label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.2rem; }
+    label.label-spacer {
+      visibility: hidden;
+      user-select: none;
+      pointer-events: none;
+    }
     input[type=text], input[type=file], select, textarea {
       padding: 0.4rem 0.55rem;
       border: 1px solid var(--border);
       border-radius: 6px;
       font: inherit;
       min-width: 10rem;
-      min-height: var(--control-height);
+      height: var(--control-height);
       background: #fff;
+    }
+    input[type=file] {
+      padding: 0.3rem 0.4rem;
     }
     button, .btn {
       background: var(--accent);
       color: #fff;
       border: none;
       border-radius: 6px;
-      padding: 0.45rem 0.85rem;
+      padding: 0 0.85rem;
       font: inherit;
       cursor: pointer;
       text-decoration: none;
@@ -114,14 +132,6 @@
     }
     button.secondary, .btn.secondary { background: #475569; }
     button.danger { background: var(--danger); }
-    .rule-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.6rem 0.9rem;
-      align-items: flex-end;
-      border-top: 1px solid var(--border);
-      padding: 0.75rem 0;
-    }
     .rule-row .rule-name {
       min-width: 7rem;
       font-weight: 700;
@@ -129,11 +139,11 @@
       align-items: center;
       height: var(--control-height);
     }
-    .rule-row .field {
+    .rule-row .field.grow {
       flex: 1;
       min-width: 16rem;
     }
-    .rule-row .field input {
+    .rule-row .field.grow input {
       width: 100%;
     }
     .table-scroll { overflow-x: auto; }
@@ -159,7 +169,7 @@
       gap: 0.35rem 0.75rem;
       margin: 0.5rem 0 0.9rem;
     }
-    .check-grid label { color: var(--text); font-size: 0.92rem; }
+    .check-grid label { color: var(--text); font-size: 0.92rem; min-height: 0; }
     footer {
       max-width: 1100px;
       margin: 0 auto 1.5rem;
