@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import tempfile
 from pathlib import Path
 from urllib.parse import quote
@@ -26,6 +27,11 @@ from web.receipts_state import ensure_receipts_dirs, receipts_dir
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+
+def _parse_keywords(raw: str) -> list[str]:
+    """Split keywords on commas, semicolons, or newlines."""
+    return [k.strip().lower() for k in re.split(r"[,;\n]+", raw or "") if k.strip()]
 
 
 def create_app() -> FastAPI:
@@ -137,7 +143,7 @@ def create_app() -> FastAPI:
         keywords: str = Form(...),
     ):
         category = category.strip()
-        keyword_list = [k.strip().lower() for k in keywords.split(",") if k.strip()]
+        keyword_list = _parse_keywords(keywords)
         if not category or not keyword_list:
             return RedirectResponse(
                 "/rules?error=Kategorie+und+mindestens+ein+Stichwort+erforderlich.",
@@ -155,7 +161,7 @@ def create_app() -> FastAPI:
         keywords: str = Form(...),
     ):
         category = category.strip()
-        keyword_list = [k.strip().lower() for k in keywords.split(",") if k.strip()]
+        keyword_list = _parse_keywords(keywords)
         if not category:
             return RedirectResponse("/rules?error=Kategorie+fehlt.", status_code=303)
         ok = store.categorizer.update_rule_keywords(category, keyword_list)
