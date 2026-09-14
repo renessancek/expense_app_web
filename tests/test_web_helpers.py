@@ -85,37 +85,44 @@ class ExportHelperTests(unittest.TestCase):
         )
         report = build_yearly_statistics_report(expenses)
 
-        self.assertEqual(len(report["monthly_tables"]), 1)
-        jan = report["monthly_tables"][0]
+        self.assertEqual(len(report["years"]), 1)
+        year_block = report["years"][0]
+        self.assertEqual(year_block["year"], 2024)
+        self.assertEqual(len(year_block["monthly_tables"]), 1)
+        jan = year_block["monthly_tables"][0]
         self.assertEqual(jan["title"], "2024-01")
         self.assertEqual(jan["columns"], ["category", "amount"])
-        self.assertEqual(jan["rows"][-1]["category"], "TOTAL")
+        self.assertEqual(jan["rows"][-1]["category"], "Summe")
         self.assertAlmostEqual(jan["rows"][-1]["amount"], 33.5)
 
-        totals_rows = report["monthly_totals"]["rows"]
-        self.assertEqual(totals_rows[-1]["Month"], "GRAND TOTAL")
+        totals_rows = year_block["monthly_totals"]["rows"]
+        self.assertEqual(totals_rows[-1]["Month"], "Summe")
         self.assertAlmostEqual(totals_rows[-1]["amount"], 33.5)
 
-        averages = {row["category"]: row["average_per_month"] for row in report["average_monthly"]["rows"]}
+        yearly = year_block["yearly_summary"]["rows"]
+        self.assertEqual(yearly[-1]["category"], "Summe")
+        self.assertAlmostEqual(yearly[-1]["amount"], 33.5)
+
+        averages = {
+            row["category"]: row["average_per_month"]
+            for row in report["average_monthly"]["rows"]
+        }
         self.assertAlmostEqual(averages["Supermarkt"], 23.5)
         self.assertAlmostEqual(averages["Amazon"], 10.0)
 
         comparison = report["yearly_comparison"]
         self.assertIn("category", comparison["columns"])
         self.assertIn("2024", comparison["columns"])
-        self.assertEqual(comparison["rows"][-1]["category"], "TOTAL")
-
-        yearly = report["yearly_summary"]["rows"]
-        self.assertEqual(yearly[-1]["Year"], "GRAND TOTAL")
-        self.assertAlmostEqual(yearly[-1]["amount"], 33.5)
+        self.assertEqual(comparison["rows"][-1]["category"], "Summe")
 
         self.assertNotIn("configured_categories", report)
+        self.assertNotIn("monthly_tables", report)
 
     def test_build_yearly_statistics_report_empty(self):
         empty = selected_expenses_for_export(self._frame(), ["NichtVorhanden"])
         report = build_yearly_statistics_report(empty)
-        self.assertEqual(report["monthly_tables"], [])
-        self.assertEqual(report["monthly_totals"]["rows"], [])
+        self.assertEqual(report["years"], [])
+        self.assertEqual(report["average_monthly"]["rows"], [])
 
 
 class TransactionsImportReportsTemplateTests(unittest.TestCase):
@@ -177,6 +184,12 @@ class TransactionsImportReportsTemplateTests(unittest.TestCase):
         self.assertIn("Importiert", html)
         self.assertIn("Nicht importiert", html)
         self.assertIn("Could not read a supported CSV format", html)
+
+    def test_filter_form_has_no_filtern_button(self):
+        html = self._render()
+        self.assertNotIn(">Filtern<", html)
+        self.assertIn('id="filter-form"', html)
+        self.assertIn("Zurücksetzen", html)
 
 
 if __name__ == "__main__":
