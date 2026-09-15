@@ -74,6 +74,46 @@ Then open `http://<host-lan-ip>:8080/` from another device on the network. If bo
 
 The image targets **linux/amd64** and **linux/arm64** (multi-arch friendly). On a Raspberry Pi (64-bit OS), the same `docker compose up -d --build` works when Docker Buildx/BuildKit is available.
 
+### Auto-update on the Pi (recommended)
+
+Blindly running `docker compose up -d --build` every hour rebuilds even when nothing changed (slow on a Pi). Prefer [`scripts/auto-update.sh`](scripts/auto-update.sh): it `git fetch`es, and only pulls + rebuilds when `origin/main` moved.
+
+**systemd timer** (preferred over cron on Raspberry Pi OS):
+
+1. Edit paths/user in [`deploy/expense-auto-update.service`](deploy/expense-auto-update.service) if needed.
+2. Install and enable:
+
+```bash
+cd ~/Dokumente/Projekte/expense_app_web
+git pull
+chmod +x scripts/auto-update.sh
+
+# Adjust User= and paths in the service file if your login/path differs, then:
+sudo cp deploy/expense-auto-update.service deploy/expense-auto-update.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now expense-auto-update.timer
+
+# Check status / last run:
+systemctl list-timers expense-auto-update.timer
+journalctl -u expense-auto-update.service -n 50 --no-pager
+```
+
+The timer fires shortly after boot, then about every hour (`OnUnitActiveSec=1h`).
+
+**cron alternative** (if you prefer crontab):
+
+```bash
+crontab -e
+```
+
+Add (adjust the path):
+
+```cron
+0 * * * * /bin/bash /home/rpi/Dokumente/Projekte/expense_app_web/scripts/auto-update.sh >> /home/rpi/expense-auto-update.log 2>&1
+```
+
+Requirements: the user can `git fetch`/`pull` (SSH key or credential helper for GitHub) and run `docker compose` (membership in the `docker` group).
+
 ## Local run (uvicorn)
 
 ```bash
