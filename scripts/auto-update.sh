@@ -7,6 +7,16 @@ REPO_DIR="${EXPENSE_APP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 BRANCH="${EXPENSE_GIT_BRANCH:-main}"
 LOG_TAG="expense-auto-update"
 
+# systemd Environment= cannot reliably hold a multi-word GIT_SSH_COMMAND.
+# Point EXPENSE_DEPLOY_KEY at a passphrase-less deploy key instead.
+if [[ -n "${EXPENSE_DEPLOY_KEY:-}" ]]; then
+  if [[ ! -f "$EXPENSE_DEPLOY_KEY" ]]; then
+    echo "$LOG_TAG: deploy key not found: $EXPENSE_DEPLOY_KEY" >&2
+    exit 1
+  fi
+  export GIT_SSH_COMMAND="/usr/bin/ssh -F /dev/null -o IdentityAgent=none -i ${EXPENSE_DEPLOY_KEY} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+fi
+
 cd "$REPO_DIR"
 
 if [[ ! -d .git ]]; then
