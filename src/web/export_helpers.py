@@ -108,14 +108,49 @@ def _yearly_summary_for_year(year_expenses: pd.DataFrame, year: int) -> dict:
     return _table(pd.concat([summary, total], ignore_index=True))
 
 
+def _average_monthly_by_year(expenses: pd.DataFrame) -> dict:
+    """Category × year pivot of (year total / months present in that year)."""
+    pieces: list[pd.DataFrame] = []
+    for year in sorted(expenses["Year"].unique()):
+        year_expenses = expenses[expenses["Year"] == year]
+        months_count = int(year_expenses["Month"].nunique())
+        if months_count <= 0:
+            continue
+        by_category = year_expenses.groupby("category", as_index=False)["amount"].sum()
+        by_category["average_per_month"] = (by_category["amount"] / months_count).round(2)
+        by_category["Year"] = int(year)
+        pieces.append(by_category[["category", "Year", "average_per_month"]])
+
+    if not pieces:
+        return {"columns": ["category"], "rows": []}
+
+    long = pd.concat(pieces, ignore_index=True)
+    pivot = long.pivot_table(
+        index="category",
+        columns="Year",
+        values="average_per_month",
+        aggfunc="sum",
+        fill_value=0,
+    ).reset_index()
+    year_columns = [column for column in pivot.columns if column != "category"]
+    pivot["_total"] = pivot[year_columns].sum(axis=1)
+    pivot = pivot.sort_values("_total", ascending=False).drop(columns="_total")
+    total = pd.DataFrame(
+        [{**{"category": TOTAL_LABEL}, **pivot[year_columns].sum().round(2).to_dict()}]
+    )
+    pivot = pd.concat([pivot, total], ignore_index=True)
+    pivot.columns = [str(c) for c in pivot.columns]
+    return _table(pivot)
+
+
 def build_yearly_statistics_report(expenses: pd.DataFrame) -> dict:
     """Build the multi-section annual report as HTML-ready structures.
 
     Years are newest-first. Each year carries its month tables (newest first),
     monthly totals, and category summary. Global sections: average monthly
-    expenses and yearly comparison. (Configured Categories live under Regeln.)
+    expenses (per year, like Jahresvergleich) and yearly comparison.
     """
-    empty_averages = {"columns": ["category", "average_per_month"], "rows": []}
+    empty_averages = {"columns": ["category"], "rows": []}
     empty_comparison = {"columns": ["category"], "rows": []}
 
     if expenses is None or getattr(expenses, "empty", True):
@@ -138,13 +173,7 @@ def build_yearly_statistics_report(expenses: pd.DataFrame) -> dict:
             }
         )
 
-    months_count = expenses["Month"].nunique()
-    averages = expenses.groupby("category", as_index=False)["amount"].sum()
-    averages["average_per_month"] = (averages["amount"] / months_count).round(2)
-    averages = averages[["category", "average_per_month"]].sort_values(
-        "average_per_month", ascending=False
-    )
-    average_table = _table(averages)
+    average_table = _average_monthly_by_year(expenses)
 
     comparison = expenses.pivot_table(
         index="category", columns="Year", values="amount", aggfunc="sum", fill_value=0
