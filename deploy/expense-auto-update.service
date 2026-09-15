@@ -6,7 +6,7 @@ Requires=docker.service
 
 [Service]
 Type=oneshot
-# Adjust User/WorkingDirectory if your checkout path differs.
+# Adjust User/WorkingDirectory/key path if your checkout differs.
 User=rpi
 Group=rpi
 SupplementaryGroups=docker
@@ -14,10 +14,9 @@ WorkingDirectory=/home/rpi/Dokumente/Projekte/expense_app_web
 Environment=HOME=/home/rpi
 Environment=EXPENSE_APP_DIR=/home/rpi/Dokumente/Projekte/expense_app_web
 Environment=EXPENSE_GIT_BRANCH=main
-# Dedicated passphrase-less deploy key. -F /dev/null ignores ~/.ssh/config
-# (which often forces id_ed25519); IdentityAgent=none skips the agent.
+# Passphrase-less deploy key path only (no spaces — safe for systemd Environment=).
 # Create: ssh-keygen -t ed25519 -f ~/.ssh/expense_app_deploy -N ""
 # Add ~/.ssh/expense_app_deploy.pub as a read-only Deploy key on the repo.
-Environment=GIT_SSH_COMMAND=/usr/bin/ssh -F /dev/null -o IdentityAgent=none -i /home/rpi/.ssh/expense_app_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new
+Environment=EXPENSE_DEPLOY_KEY=/home/rpi/.ssh/expense_app_deploy
 ExecStart=/bin/bash /home/rpi/Dokumente/Projekte/expense_app_web/scripts/auto-update.sh
 Nice=10
