@@ -103,12 +103,14 @@ class ExportHelperTests(unittest.TestCase):
         self.assertEqual(yearly[-1]["category"], "Summe")
         self.assertAlmostEqual(yearly[-1]["amount"], 33.5)
 
-        averages = {
-            row["category"]: row["average_per_month"]
-            for row in report["average_monthly"]["rows"]
-        }
-        self.assertAlmostEqual(averages["Supermarkt"], 23.5)
-        self.assertAlmostEqual(averages["Amazon"], 10.0)
+        averages = report["average_monthly"]
+        self.assertIn("category", averages["columns"])
+        self.assertIn("2024", averages["columns"])
+        by_category = {row["category"]: row for row in averages["rows"]}
+        self.assertAlmostEqual(by_category["Supermarkt"]["2024"], 23.5)
+        self.assertAlmostEqual(by_category["Amazon"]["2024"], 10.0)
+        self.assertEqual(averages["rows"][-1]["category"], "Summe")
+        self.assertAlmostEqual(averages["rows"][-1]["2024"], 33.5)
 
         comparison = report["yearly_comparison"]
         self.assertIn("category", comparison["columns"])
@@ -185,11 +187,11 @@ class TransactionsImportReportsTemplateTests(unittest.TestCase):
         self.assertIn("Nicht importiert", html)
         self.assertIn("Could not read a supported CSV format", html)
 
-    def test_filter_form_has_no_filtern_button(self):
+    def test_filter_form_has_no_extra_buttons(self):
         html = self._render()
         self.assertNotIn(">Filtern<", html)
+        self.assertNotIn("Zurücksetzen", html)
         self.assertIn('id="filter-form"', html)
-        self.assertIn("Zurücksetzen", html)
 
 
 if __name__ == "__main__":
