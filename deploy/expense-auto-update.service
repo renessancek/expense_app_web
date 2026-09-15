@@ -14,9 +14,10 @@ WorkingDirectory=/home/rpi/Dokumente/Projekte/expense_app_web
 Environment=HOME=/home/rpi
 Environment=EXPENSE_APP_DIR=/home/rpi/Dokumente/Projekte/expense_app_web
 Environment=EXPENSE_GIT_BRANCH=main
-# Use a dedicated passphrase-less deploy key (not your personal SSH key).
-# Create with: ssh-keygen -t ed25519 -f ~/.ssh/expense_app_deploy -N ""
-# Then add ~/.ssh/expense_app_deploy.pub as a read-only Deploy key on the GitHub repo.
-Environment=GIT_SSH_COMMAND=/usr/bin/ssh -i /home/rpi/.ssh/expense_app_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new
+# Dedicated passphrase-less deploy key. -F /dev/null ignores ~/.ssh/config
+# (which often forces id_ed25519); IdentityAgent=none skips the agent.
+# Create: ssh-keygen -t ed25519 -f ~/.ssh/expense_app_deploy -N ""
+# Add ~/.ssh/expense_app_deploy.pub as a read-only Deploy key on the repo.
+Environment=GIT_SSH_COMMAND=/usr/bin/ssh -F /dev/null -o IdentityAgent=none -i /home/rpi/.ssh/expense_app_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new
 ExecStart=/bin/bash /home/rpi/Dokumente/Projekte/expense_app_web/scripts/auto-update.sh
 Nice=10
