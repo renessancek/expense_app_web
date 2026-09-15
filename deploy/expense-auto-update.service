@@ -1,0 +1,17 @@
+[Unit]
+Description=Update expense_app_web from git and rebuild Docker image
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+# Adjust User/WorkingDirectory if your checkout path or user differs.
+User=rpi
+WorkingDirectory=/home/rpi/Dokumente/Projekte/expense_app_web
+Environment=EXPENSE_APP_DIR=/home/rpi/Dokumente/Projekte/expense_app_web
+Environment=EXPENSE_GIT_BRANCH=main
+# If Docker needs the user in the docker group, User= above is enough;
+# otherwise run as root or add supplementary groups.
+ExecStart=/bin/bash /home/rpi/Dokumente/Projekte/expense_app_web/scripts/auto-update.sh
+Nice=10
