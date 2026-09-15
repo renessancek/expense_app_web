@@ -110,19 +110,28 @@
 
   <div class="card">
     <h2>Durchschnittliche monatliche Ausgaben</h2>
+    <p class="muted">Pro Jahr: Summe der Kategorie ÷ Anzahl Monate mit Daten in diesem Jahr.</p>
     <div class="table-scroll">
       <table>
         <thead>
           <tr>
-            <th>Kategorie</th>
-            <th class="num">Durchschnitt/Monat</th>
+            {% for col in report.average_monthly.columns %}
+            <th{% if col != 'category' %} class="num"{% endif %}>
+              {% if col == 'category' %}Kategorie{% else %}{{ col }}{% endif %}
+            </th>
+            {% endfor %}
           </tr>
         </thead>
         <tbody>
           {% for row in report.average_monthly.rows %}
-          <tr>
-            <td>{{ row.category }}</td>
-            <td class="num">{{ "%.2f"|format(row.average_per_month) }} €</td>
+          <tr{% if row.category == 'Summe' %} class="row-total"{% endif %}>
+            {% for col in report.average_monthly.columns %}
+            {% if col == 'category' %}
+            <td>{{ row[col] }}</td>
+            {% else %}
+            <td class="num">{{ "%.2f"|format(row[col]) }} €</td>
+            {% endif %}
+            {% endfor %}
           </tr>
           {% endfor %}
         </tbody>
