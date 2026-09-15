@@ -1,0 +1,10 @@
+[Unit]
+Description=Hourly check for expense_app_web updates
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
