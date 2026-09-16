@@ -189,5 +189,40 @@
     </details>
   </div>
 
+  <div class="card">
+    <details class="collapse">
+      <summary>
+        <h2>Monatsvergleich</h2>
+      </summary>
+      <p class="muted">Absolute Ausgaben je Kalendermonat, Jahre nebeneinander.</p>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              {% for col in report.monthly_yearly_comparison.columns %}
+              <th{% if col != 'month' %} class="num"{% endif %}>
+                {% if col == 'month' %}Monat{% else %}{{ col }}{% endif %}
+              </th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in report.monthly_yearly_comparison.rows %}
+            <tr{% if row.month == 'Summe' %} class="row-total"{% endif %}>
+              {% for col in report.monthly_yearly_comparison.columns %}
+              {% if col == 'month' %}
+              <td>{{ row[col] }}</td>
+              {% else %}
+              <td class="num">{{ "%.2f"|format(row[col]) }} €</td>
+              {% endif %}
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  </div>
+
   {% endif %}
 {% endblock %}
