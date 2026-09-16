@@ -92,8 +92,17 @@
       margin: 0;
       font-size: 1.05rem;
     }
+    details.collapse > summary h3 {
+      margin: 0;
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
     details.collapse[open] > summary {
       margin-bottom: 0.6rem;
+    }
+    details.collapse.nested {
+      margin: 0.55rem 0;
+      padding-left: 0.15rem;
     }
     /* Same structure for fields and actions (label + control) so they share one baseline */
     .row,
