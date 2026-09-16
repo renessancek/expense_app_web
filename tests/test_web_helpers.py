@@ -117,6 +117,16 @@ class ExportHelperTests(unittest.TestCase):
         self.assertIn("2024", comparison["columns"])
         self.assertEqual(comparison["rows"][-1]["category"], "Summe")
 
+        monthly_yearly = report["monthly_yearly_comparison"]
+        self.assertIn("month", monthly_yearly["columns"])
+        self.assertIn("2024", monthly_yearly["columns"])
+        self.assertEqual(len(monthly_yearly["rows"]), 13)
+        by_month = {row["month"]: row for row in monthly_yearly["rows"]}
+        self.assertAlmostEqual(by_month["Januar"]["2024"], 33.5)
+        self.assertAlmostEqual(by_month["Februar"]["2024"], 0.0)
+        self.assertEqual(monthly_yearly["rows"][-1]["month"], "Summe")
+        self.assertAlmostEqual(monthly_yearly["rows"][-1]["2024"], 33.5)
+
         self.assertNotIn("configured_categories", report)
         self.assertNotIn("monthly_tables", report)
 
@@ -125,6 +135,7 @@ class ExportHelperTests(unittest.TestCase):
         report = build_yearly_statistics_report(empty)
         self.assertEqual(report["years"], [])
         self.assertEqual(report["average_monthly"]["rows"], [])
+        self.assertEqual(report["monthly_yearly_comparison"]["rows"], [])
 
 
 class TransactionsImportReportsTemplateTests(unittest.TestCase):
