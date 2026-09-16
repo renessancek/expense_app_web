@@ -12,6 +12,21 @@ DEFAULT_UNSELECTED_EXPORT_CATEGORIES = DEFAULT_UNSELECTED_CATEGORIES
 
 TOTAL_LABEL = "Summe"
 
+MONTH_NAMES_DE = {
+    1: "Januar",
+    2: "Februar",
+    3: "März",
+    4: "April",
+    5: "Mai",
+    6: "Juni",
+    7: "Juli",
+    8: "August",
+    9: "September",
+    10: "Oktober",
+    11: "November",
+    12: "Dezember",
+}
+
 
 def listed_amount_sum(frame: pd.DataFrame | None) -> float:
     """Return the numeric sum of amounts in a filtered transaction list."""
@@ -143,21 +158,50 @@ def _average_monthly_by_year(expenses: pd.DataFrame) -> dict:
     return _table(pivot)
 
 
+def _monthly_yearly_comparison(expenses: pd.DataFrame) -> dict:
+    """Calendar month × year pivot of absolute expense totals."""
+    frame = expenses.copy()
+    frame["month_num"] = frame["date"].dt.month
+    pivot = frame.pivot_table(
+        index="month_num",
+        columns="Year",
+        values="amount",
+        aggfunc="sum",
+        fill_value=0,
+    )
+    for month_num in range(1, 13):
+        if month_num not in pivot.index:
+            pivot.loc[month_num] = 0
+    pivot = pivot.sort_index()
+    year_columns = list(pivot.columns)
+    pivot = pivot.reset_index()
+    pivot.insert(0, "month", pivot["month_num"].map(MONTH_NAMES_DE))
+    pivot = pivot.drop(columns=["month_num"])
+    total = pd.DataFrame(
+        [{**{"month": TOTAL_LABEL}, **pivot[year_columns].sum().to_dict()}]
+    )
+    pivot = pd.concat([pivot, total], ignore_index=True)
+    pivot.columns = [str(c) for c in pivot.columns]
+    return _table(pivot)
+
+
 def build_yearly_statistics_report(expenses: pd.DataFrame) -> dict:
     """Build the multi-section annual report as HTML-ready structures.
 
     Years are newest-first. Each year carries its month tables (newest first),
     monthly totals, and category summary. Global sections: average monthly
-    expenses (per year, like Jahresvergleich) and yearly comparison.
+    expenses (per year), category yearly comparison, and month × year totals.
     """
     empty_averages = {"columns": ["category"], "rows": []}
     empty_comparison = {"columns": ["category"], "rows": []}
+    empty_monthly_yearly = {"columns": ["month"], "rows": []}
 
     if expenses is None or getattr(expenses, "empty", True):
         return {
             "years": [],
             "average_monthly": empty_averages,
             "yearly_comparison": empty_comparison,
+            "monthly_yearly_comparison": empty_monthly_yearly,
         }
 
     years_out: list[dict] = []
@@ -192,6 +236,7 @@ def build_yearly_statistics_report(expenses: pd.DataFrame) -> dict:
         "years": years_out,
         "average_monthly": average_table,
         "yearly_comparison": comparison_table,
+        "monthly_yearly_comparison": _monthly_yearly_comparison(expenses),
     }
 
 
