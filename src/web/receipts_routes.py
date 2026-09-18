@@ -14,7 +14,6 @@ from receipt_extractor import (
     ReceiptExtractError,
     extract_receipt,
     extract_receipt_folder,
-    list_receipt_files,
     receipt_import_row,
 )
 from web.deps import AuthDep, StoreDep
@@ -36,23 +35,6 @@ from web.receipts_state import (
     safe_upload_filename,
     set_last_rows,
 )
-
-
-def _receipt_folder_files():
-    """List receipt files in receipts/ and receipts/uploads/ (non-recursive)."""
-    ensure_receipts_dirs()
-    files = []
-    seen = set()
-    for folder in (receipts_dir(), receipts_uploads_dir()):
-        try:
-            for path in list_receipt_files(folder):
-                key = str(path.resolve())
-                if key not in seen:
-                    seen.add(key)
-                    files.append(path)
-        except ReceiptExtractError:
-            continue
-    return sorted(files, key=lambda p: p.name.lower())
 
 
 def _extract_receipts_folders(categorizer=None):
@@ -90,7 +72,6 @@ def register_receipts_routes(app: FastAPI, templates: Jinja2Templates) -> None:
         ensure_receipts_dirs()
         # Drop cache entries for files already gone (keeps Positionen summiert honest).
         prune_missing_receipt_rows()
-        folder_files = _receipt_folder_files()
         rows = get_last_rows()
         item_totals = aggregate_receipt_items(rows)
         return templates.TemplateResponse(
@@ -102,10 +83,6 @@ def register_receipts_routes(app: FastAPI, templates: Jinja2Templates) -> None:
                 "message": message,
                 "error": error,
                 "receipts_path": str(receipts_dir()),
-                "folder_files": [
-                    {"name": p.name, "path": str(p.resolve())} for p in folder_files
-                ],
-                "folder_count": len(folder_files),
                 "rows": rows,
                 "item_totals": item_totals,
             },
