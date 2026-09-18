@@ -6,6 +6,7 @@ from pathlib import Path
 from threading import Lock
 
 from app_paths import expense_data_dir, user_data_dir
+from receipt_extractor import is_quantity_display_line
 
 _lock = Lock()
 _last_rows: list[dict] = []
@@ -282,9 +283,10 @@ def aggregate_receipt_items(rows: list[dict] | None) -> list[dict]:
     """Sum line-item amounts by calendar month + exact description text.
 
     Matching is case- and whitespace-sensitive (as extracted). Only successful
-    extractions contribute. Returns month groups newest-first; within each
-    month, rows are sorted by amount descending. Each group:
-    ``{month, rows: [{description, amount}, ...], total}``.
+    extractions contribute. Quantity-display lines like ``2 x 2.19`` (and bare
+    ``2 x`` descriptions from older parses) are skipped. Returns month groups
+    newest-first; within each month, rows are sorted by amount descending.
+    Each group: ``{month, rows: [{description, amount}, ...], total}``.
     """
     buckets: dict[tuple[str, str], dict] = {}
     for row in rows or []:
@@ -299,6 +301,9 @@ def aggregate_receipt_items(rows: list[dict] | None) -> list[dict]:
         for item in result.get("items") or []:
             description = item.get("description")
             if not isinstance(description, str) or description == "":
+                continue
+            # Skip OCR quantity-display lines like "2 x 2.19" (no product name).
+            if is_quantity_display_line(description):
                 continue
             key = (month, description)
             bucket = buckets.get(key)

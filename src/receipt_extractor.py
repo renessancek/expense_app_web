@@ -24,6 +24,10 @@ _TRAILING_AMOUNT_RE = re.compile(
     rf"^(?P<desc>.*?)(?:\s+(?P<qty>\d+(?:[.,]\d+)?)\s*[x×])?\s+(?P<amount>{_AMOUNT_TOKEN})(?:\s+{_TAX_CLASS})?\s*$"
 )
 _LEADING_QTY_RE = re.compile(r"^(?P<qty>\d+(?:[.,]\d+)?)\s*[x×]\s+(?P<desc>.+)$", re.I)
+_QTY_DISPLAY_ONLY_RE = re.compile(
+    rf"^\d+(?:[.,]\d+)?\s*[x×]\s*(?:{_AMOUNT_TOKEN})\s*$",
+    re.I,
+)
 _QTY_UNIT_LINE_RE = re.compile(
     rf"^(?:(?P<desc>.+?)\s+)?"
     rf"(?P<qty>\d+(?:[.,]\d+)?)\s*[x×]\s+"
@@ -62,6 +66,19 @@ _SKIP_MERCHANT_RE = re.compile(
 
 class ReceiptExtractError(Exception):
     """Raised when a receipt file cannot be opened or is an unsupported type."""
+
+
+_QTY_BARE_RE = re.compile(r"^\d+(?:[.,]\d+)?\s*[x×]\s*$", re.I)
+
+
+def is_quantity_display_line(text):
+    """True for display-only qty lines like '2 x 2.19' or bare '2 x' (no product name)."""
+    s = str(text or "").strip()
+    if not s:
+        return False
+    if _QTY_DISPLAY_ONLY_RE.match(s):
+        return True
+    return bool(_QTY_BARE_RE.match(s))
 
 
 def find_tesseract():
@@ -318,6 +335,8 @@ def parse_receipt_text(text):
     items = []
     pending_description = None
     for line in lines:
+        if is_quantity_display_line(line):
+            continue
         date = date or parse_date(line)
         qty_item = _parse_qty_unit_line(line, pending_description)
         if qty_item:
@@ -491,6 +510,8 @@ def _is_noise_description(description):
 
 
 def _looks_like_item_description(line):
+    if is_quantity_display_line(line):
+        return False
     if not re.search(r"[A-Za-zÄÖÜäöüß]", line):
         return False
     if _GENERIC_HEADER_RE.search(line) or _SKIP_MERCHANT_RE.search(line):
@@ -505,6 +526,8 @@ def _looks_like_item_description(line):
 def _item_dict(description, quantity, amount):
     description = (description or "").strip()
     if not description or not re.search(r"[A-Za-zÄÖÜäöüß]", description):
+        return None
+    if is_quantity_display_line(description):
         return None
     if _is_noise_description(description):
         return None

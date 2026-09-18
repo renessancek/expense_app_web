@@ -14,7 +14,11 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from receipt_extractor import extract_receipt_folder  # noqa: E402
+from receipt_extractor import (  # noqa: E402
+    extract_receipt_folder,
+    is_quantity_display_line,
+    parse_receipt_text,
+)
 from web.receipts_state import (  # noqa: E402
     aggregate_receipt_items,
     clear_last_rows,
@@ -275,6 +279,69 @@ class ReceiptsStateHelpersTests(unittest.TestCase):
         self.assertAlmostEqual(jan["rows"][0]["amount"], 7.98)
         self.assertAlmostEqual(jan["rows"][1]["amount"], 1.29)
         self.assertNotIn("quantity", jan["rows"][0])
+
+
+
+class QuantityDisplayLineTests(unittest.TestCase):
+    def test_is_quantity_display_line(self):
+        self.assertTrue(is_quantity_display_line("2 x 2.19"))
+        self.assertTrue(is_quantity_display_line("2 x 2,19"))
+        self.assertTrue(is_quantity_display_line("2×2.69"))
+        self.assertTrue(is_quantity_display_line("2 x"))
+        self.assertFalse(is_quantity_display_line("Alpro Blueb. Muffin B 4.38"))
+        self.assertFalse(is_quantity_display_line("2 x 0,99 1,98"))
+
+    def test_parse_skips_qty_display_keeps_product_line(self):
+        parsed = parse_receipt_text(
+            "Supermarkt\n"
+            "01.08.2024\n"
+            "2 x  2.19\n"
+            "Alpro Blueb. Muffin B  4.38\n"
+            "2 x  2.69\n"
+            "Alpro Rote Früchte Dattel B 5.38\n"
+            "Summe 9.76\n"
+        )
+        descs = [i["description"] for i in parsed["items"]]
+        self.assertEqual(
+            descs,
+            ["Alpro Blueb. Muffin B", "Alpro Rote Früchte Dattel B"],
+        )
+        self.assertAlmostEqual(parsed["items"][0]["amount"], 4.38)
+        self.assertAlmostEqual(parsed["items"][1]["amount"], 5.38)
+
+    def test_aggregate_skips_qty_display_and_bare_qty_descriptions(self):
+        rows = [
+            {
+                "status": "Extracted",
+                "date": "2024-08-01",
+                "result": {
+                    "date": "2024-08-01",
+                    "items": [
+                        {"description": "2 x", "quantity": 1, "amount": 2.19},
+                        {
+                            "description": "Alpro Blueb. Muffin B",
+                            "quantity": 1,
+                            "amount": 4.38,
+                        },
+                        {"description": "2 x 2.19", "quantity": 1, "amount": 2.19},
+                        {
+                            "description": "Alpro Rote Früchte Dattel B",
+                            "quantity": 1,
+                            "amount": 5.38,
+                        },
+                    ],
+                },
+            },
+        ]
+        groups = aggregate_receipt_items(rows)
+        self.assertEqual(len(groups), 1)
+        descs = [r["description"] for r in groups[0]["rows"]]
+        self.assertEqual(
+            descs,
+            ["Alpro Rote Früchte Dattel B", "Alpro Blueb. Muffin B"],
+        )
+        self.assertAlmostEqual(groups[0]["total"], 9.76)
+
 
 
 if __name__ == "__main__":
