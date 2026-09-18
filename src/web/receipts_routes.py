@@ -19,9 +19,11 @@ from receipt_extractor import (
 )
 from web.deps import AuthDep, StoreDep
 from web.receipts_state import (
+    aggregate_receipt_items,
     ensure_receipts_dirs,
     find_row_by_path,
     format_date_de,
+    format_month_de,
     format_status_de,
     format_total_de,
     get_last_rows,
@@ -73,6 +75,7 @@ def register_receipts_routes(app: FastAPI, templates: Jinja2Templates) -> None:
     templates.env.filters["status_de"] = format_status_de
     templates.env.filters["total_de"] = format_total_de
     templates.env.filters["date_de"] = format_date_de
+    templates.env.filters["month_de"] = format_month_de
 
     @app.get("/receipts", response_class=HTMLResponse)
     async def receipts_page(
@@ -84,6 +87,7 @@ def register_receipts_routes(app: FastAPI, templates: Jinja2Templates) -> None:
         ensure_receipts_dirs()
         folder_files = _receipt_folder_files()
         rows = get_last_rows()
+        item_totals = aggregate_receipt_items(rows)
         return templates.TemplateResponse(
             request,
             "receipts.html",
@@ -96,6 +100,7 @@ def register_receipts_routes(app: FastAPI, templates: Jinja2Templates) -> None:
                 "folder_files": [p.name for p in folder_files],
                 "folder_count": len(folder_files),
                 "rows": rows,
+                "item_totals": item_totals,
             },
         )
 
