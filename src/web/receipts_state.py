@@ -200,8 +200,9 @@ def aggregate_receipt_items(rows: list[dict] | None) -> list[dict]:
     """Sum line-item amounts by calendar month + exact description text.
 
     Matching is case- and whitespace-sensitive (as extracted). Only successful
-    extractions contribute. Each result row has month, description, and amount
-    (no quantity). Sorted by month (newest first), then description.
+    extractions contribute. Returns month groups newest-first; within each
+    month, rows are sorted by amount descending. Each group:
+    ``{month, rows: [{description, amount}, ...], total}``.
     """
     buckets: dict[tuple[str, str], dict] = {}
     for row in rows or []:
@@ -221,7 +222,6 @@ def aggregate_receipt_items(rows: list[dict] | None) -> list[dict]:
             bucket = buckets.get(key)
             if bucket is None:
                 bucket = {
-                    "month": month,
                     "description": description,
                     "amount": 0.0,
                 }
@@ -233,6 +233,21 @@ def aggregate_receipt_items(rows: list[dict] | None) -> list[dict]:
             except (TypeError, ValueError):
                 pass
 
-    aggregated = list(buckets.values())
-    aggregated.sort(key=lambda r: (_month_sort_key(r["month"]), r["description"]))
-    return aggregated
+    by_month: dict[str, list[dict]] = {}
+    for (month, _description), bucket in buckets.items():
+        by_month.setdefault(month, []).append(bucket)
+
+    groups: list[dict] = []
+    for month in sorted(by_month.keys(), key=_month_sort_key):
+        month_rows = sorted(
+            by_month[month],
+            key=lambda r: (-float(r["amount"]), r["description"]),
+        )
+        groups.append(
+            {
+                "month": month,
+                "rows": month_rows,
+                "total": sum(float(r["amount"]) for r in month_rows),
+            }
+        )
+    return groups
