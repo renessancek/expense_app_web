@@ -20,6 +20,7 @@ from receipt_extractor import (
 from web.deps import AuthDep, StoreDep
 from web.receipts_state import (
     aggregate_receipt_items,
+    delete_receipt_from_cache,
     ensure_receipts_dirs,
     find_row_by_path,
     format_date_de,
@@ -27,10 +28,10 @@ from web.receipts_state import (
     format_status_de,
     format_total_de,
     get_last_rows,
+    prune_missing_receipt_rows,
     receipt_name_taken,
     receipts_dir,
     receipts_uploads_dir,
-    remove_last_row_by_path,
     resolve_under_receipts,
     safe_upload_filename,
     set_last_rows,
@@ -87,6 +88,8 @@ def register_receipts_routes(app: FastAPI, templates: Jinja2Templates) -> None:
         error: str = "",
     ):
         ensure_receipts_dirs()
+        # Drop cache entries for files already gone (keeps Positionen summiert honest).
+        prune_missing_receipt_rows()
         folder_files = _receipt_folder_files()
         rows = get_last_rows()
         item_totals = aggregate_receipt_items(rows)
@@ -186,6 +189,7 @@ def register_receipts_routes(app: FastAPI, templates: Jinja2Templates) -> None:
 
     @app.post("/receipts/delete")
     async def receipts_delete(_: AuthDep, path: str = Form("")):
+        """Delete a receipt file and cascade-remove its cached Positionen."""
         resolved = resolve_under_receipts(path)
         if resolved is None:
             return RedirectResponse(
@@ -193,6 +197,8 @@ def register_receipts_routes(app: FastAPI, templates: Jinja2Templates) -> None:
                 status_code=303,
             )
         if not resolved.is_file():
+            # File already gone — still purge cache so Positionen don't linger.
+            delete_receipt_from_cache(resolved)
             return RedirectResponse(
                 f"/receipts?error={quote('Beleg-Datei nicht gefunden.')}",
                 status_code=303,
@@ -205,7 +211,8 @@ def register_receipts_routes(app: FastAPI, templates: Jinja2Templates) -> None:
                 f"/receipts?error={quote(f'Datei konnte nicht gelöscht werden: {err}')}",
                 status_code=303,
             )
-        remove_last_row_by_path(resolved)
+        # Cascades: drops extraction row + nested line items; prunes orphans.
+        delete_receipt_from_cache(resolved)
         return RedirectResponse(
             f"/receipts?message={quote(f'{name} gelöscht.')}",
             status_code=303,
