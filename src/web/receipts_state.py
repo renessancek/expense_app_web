@@ -129,7 +129,7 @@ def safe_upload_filename(filename: str | None) -> str:
 
 
 def unique_target(directory: Path, filename: str) -> Path:
-    """Pick a non-colliding path under ``directory`` for ``filename"."""
+    """Pick a non-colliding path under ``directory`` for ``filename``."""
     directory.mkdir(parents=True, exist_ok=True)
     base = safe_upload_filename(filename)
     target = directory / base
