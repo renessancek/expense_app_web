@@ -53,12 +53,8 @@ def _row_date(row: dict) -> str:
 
 def sort_receipt_rows_by_date_desc(rows: list[dict] | None) -> list[dict]:
     """Sort extraction rows by date descending; undated rows last."""
-    def key(row: dict) -> tuple:
-        date = _row_date(row)
-        # YYYY-MM-DD sorts lexicographically; empty dates last.
-        return (0 if date else 1, date)
-
-    return sorted(rows or [], key=key, reverse=True)
+    # Empty date sorts last under reverse=True because "" is the smallest string.
+    return sorted(rows or [], key=_row_date, reverse=True)
 
 
 def set_last_rows(rows: list[dict]) -> None:
@@ -133,7 +129,7 @@ def safe_upload_filename(filename: str | None) -> str:
 
 
 def unique_target(directory: Path, filename: str) -> Path:
-    """Pick a non-colliding path under ``directory`` for ``filename``."""
+    """Pick a non-colliding path under ``directory`` for ``filename"."""
     directory.mkdir(parents=True, exist_ok=True)
     base = safe_upload_filename(filename)
     target = directory / base
