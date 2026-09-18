@@ -122,12 +122,15 @@ def create_app() -> FastAPI:
         message: str = "",
         error: str = "",
     ):
-        rules = store.categorizer.rules
+        rules = sorted(
+            store.categorizer.rules,
+            key=lambda rule: str(rule.get("category", "")).casefold(),
+        )
         return templates.TemplateResponse(
             request,
             "rules.html",
             {
-                "title": "Regeln",
+                "title": "Kategorien",
                 "rules": rules,
                 "message": message,
                 "error": error,
@@ -151,7 +154,7 @@ def create_app() -> FastAPI:
             )
         store.categorizer.add_rule(keyword_list, category)
         store.reload(selected_files=store.selected_files)
-        return RedirectResponse("/rules?message=Regel+gespeichert.", status_code=303)
+        return RedirectResponse("/rules?message=Kategorie+gespeichert.", status_code=303)
 
     @app.post("/rules/update")
     async def rules_update(
@@ -167,11 +170,11 @@ def create_app() -> FastAPI:
         ok = store.categorizer.update_rule_keywords(category, keyword_list)
         if not ok:
             return RedirectResponse(
-                f"/rules?error=Regel+f%C3%BCr+{category}+nicht+gefunden.",
+                f"/rules?error=Kategorie+{category}+nicht+gefunden.",
                 status_code=303,
             )
         store.reload(selected_files=store.selected_files)
-        return RedirectResponse("/rules?message=Regel+aktualisiert.", status_code=303)
+        return RedirectResponse("/rules?message=Kategorie+aktualisiert.", status_code=303)
 
     @app.post("/rules/delete")
     async def rules_delete(
@@ -183,7 +186,7 @@ def create_app() -> FastAPI:
         if category:
             store.categorizer.delete_rule(category)
             store.reload(selected_files=store.selected_files)
-        return RedirectResponse(f"/rules?message={quote('Regel gelöscht.')}", status_code=303)
+        return RedirectResponse(f"/rules?message={quote('Kategorie gelöscht.')}", status_code=303)
 
     @app.post("/rules/import")
     async def rules_import(
@@ -216,7 +219,7 @@ def create_app() -> FastAPI:
                 os.unlink(tmp_path)
             except OSError:
                 pass
-        return RedirectResponse("/rules?message=Regeln+importiert.", status_code=303)
+        return RedirectResponse("/rules?message=Kategorien+importiert.", status_code=303)
 
     @app.post("/rules/restore")
     async def rules_restore(_: AuthDep, store: StoreDep):
