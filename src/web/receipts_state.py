@@ -10,6 +10,8 @@ from app_paths import expense_data_dir, user_data_dir
 _lock = Lock()
 _last_rows: list[dict] = []
 
+NO_DATE_MONTH = "ohne Datum"
+
 
 def data_root_for_receipts() -> Path:
     """Resolve writable root (EXPENSE_DATA_DIR or user data dir)."""
@@ -151,3 +153,76 @@ def format_date_de(date_str: str | None) -> str:
         y, m, d = text.split("-")
         return f"{d}.{m}.{y}"
     return text
+
+
+def format_month_de(month_str: str | None) -> str:
+    """Show YYYY-MM as MM.YYYY when possible."""
+    text = (month_str or "").strip()
+    if text == NO_DATE_MONTH:
+        return NO_DATE_MONTH
+    if len(text) == 7 and text[4] == "-":
+        y, m = text.split("-")
+        return f"{m}.{y}"
+    return text
+
+
+def _month_sort_key(month: str) -> tuple:
+    """Sort key: dated months newest-first, undated last."""
+    if month == NO_DATE_MONTH:
+        return (1, 0)
+    if len(month) == 7 and month[4] == "-":
+        try:
+            return (0, -(int(month[:4]) * 100 + int(month[5:7])))
+        except ValueError:
+            return (0, 0)
+    return (0, 0)
+
+
+def aggregate_receipt_items(rows: list[dict] | None) -> list[dict]:
+    """Sum line items by calendar month + exact description text.
+
+    Matching is case- and whitespace-sensitive (as extracted). Only successful
+    extractions contribute. Returns rows sorted by month (newest first), then
+    description.
+    """
+    buckets: dict[tuple[str, str], dict] = {}
+    for row in rows or []:
+        if row.get("status") != "Extracted":
+            continue
+        result = row.get("result") or {}
+        date = row.get("date") or result.get("date")
+        if isinstance(date, str) and len(date) >= 7 and date[4] == "-":
+            month = date[:7]
+        else:
+            month = NO_DATE_MONTH
+        for item in result.get("items") or []:
+            description = item.get("description")
+            if not isinstance(description, str) or description == "":
+                continue
+            key = (month, description)
+            bucket = buckets.get(key)
+            if bucket is None:
+                bucket = {
+                    "month": month,
+                    "description": description,
+                    "quantity": 0.0,
+                    "amount": 0.0,
+                    "line_count": 0,
+                }
+                buckets[key] = bucket
+            qty = item.get("quantity")
+            try:
+                bucket["quantity"] += float(qty) if qty is not None else 1.0
+            except (TypeError, ValueError):
+                bucket["quantity"] += 1.0
+            amount = item.get("amount")
+            try:
+                if amount is not None:
+                    bucket["amount"] += float(amount)
+            except (TypeError, ValueError):
+                pass
+            bucket["line_count"] += 1
+
+    aggregated = list(buckets.values())
+    aggregated.sort(key=lambda r: (_month_sort_key(r["month"]), r["description"]))
+    return aggregated
