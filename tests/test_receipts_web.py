@@ -16,9 +16,11 @@ if str(SRC) not in sys.path:
 
 from receipt_extractor import extract_receipt_folder  # noqa: E402
 from web.receipts_state import (  # noqa: E402
+    aggregate_receipt_items,
     clear_last_rows,
     ensure_receipts_dirs,
     format_date_de,
+    format_month_de,
     format_status_de,
     get_last_rows,
     receipts_dir,
@@ -95,6 +97,46 @@ class ReceiptsStateHelpersTests(unittest.TestCase):
         self.assertEqual(format_status_de("Extracted"), "Extrahiert")
         self.assertEqual(format_status_de("Failed"), "Fehler")
         self.assertEqual(format_date_de("2024-01-15"), "15.01.2024")
+        self.assertEqual(format_month_de("2024-01"), "01.2024")
+
+    def test_aggregate_receipt_items_exact_text_and_month(self):
+        rows = [
+            {
+                "status": "Extracted",
+                "date": "2024-01-10",
+                "result": {
+                    "date": "2024-01-10",
+                    "items": [
+                        {"description": "Alpromil", "quantity": 1, "amount": 3.99},
+                        {"description": "Alpromil", "quantity": 1, "amount": 3.99},
+                        {"description": "Milch", "quantity": 1, "amount": 1.29},
+                    ],
+                },
+            },
+            {
+                "status": "Extracted",
+                "date": "2024-02-01",
+                "result": {
+                    "date": "2024-02-01",
+                    "items": [
+                        {"description": "Alpromil", "quantity": 1, "amount": 3.99},
+                    ],
+                },
+            },
+            {
+                "status": "Failed",
+                "date": None,
+                "result": None,
+            },
+        ]
+        totals = aggregate_receipt_items(rows)
+        by_key = {(r["month"], r["description"]): r["amount"] for r in totals}
+        self.assertAlmostEqual(by_key[("2024-01", "Alpromil")], 7.98)
+        self.assertAlmostEqual(by_key[("2024-01", "Milch")], 1.29)
+        self.assertAlmostEqual(by_key[("2024-02", "Alpromil")], 3.99)
+        self.assertNotIn("quantity", totals[0])
+        # Exact match: different casing does not merge
+        self.assertEqual(len(totals), 3)
 
 
 if __name__ == "__main__":
