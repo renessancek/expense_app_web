@@ -73,4 +73,31 @@
     <p class="muted">Noch keine Extraktion. Dateien hochladen oder den Ordner scannen.</p>
     {% endif %}
   </div>
+
+  {% if item_totals %}
+  <div class="card">
+    <h2>Positionen summiert ({{ item_totals|length }})</h2>
+    <p class="muted">Gleicher Text (exakt wie extrahiert) pro Kalendermonat — nur Beträge addiert.</p>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Monat</th>
+            <th>Beschreibung</th>
+            <th class="num">Betrag</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in item_totals %}
+          <tr>
+            <td>{{ row.month|month_de }}</td>
+            <td>{{ row.description }}</td>
+            <td class="num">{{ "%.2f"|format(row.amount) }} €</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
 {% endblock %}
