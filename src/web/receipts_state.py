@@ -96,7 +96,11 @@ def find_row_by_path(path: str | Path) -> dict | None:
 
 
 def remove_last_row_by_path(path: str | Path) -> bool:
-    """Drop a cached extraction row for ``path``. Returns True if removed."""
+    """Drop a cached extraction row for ``path`` (incl. nested Positionen).
+
+    Returns True if a row was removed. Line items live only inside the row's
+    ``result``; removing the row is the cascade delete for Positionen.
+    """
     try:
         target = Path(path).resolve()
     except (OSError, RuntimeError, ValueError):
@@ -119,6 +123,44 @@ def remove_last_row_by_path(path: str | Path) -> bool:
             kept.append(row)
         if removed:
             _last_rows[:] = kept
+    return removed
+
+
+def prune_missing_receipt_rows() -> int:
+    """Drop cache rows whose receipt file no longer exists.
+
+    Prevents orphaned Positionen in "Positionen summiert" after a delete or
+    after files were removed outside the app. Returns how many rows were dropped.
+    """
+    removed = 0
+    with _lock:
+        kept: list[dict] = []
+        for row in _last_rows:
+            raw = row.get("path")
+            if not raw:
+                kept.append(row)
+                continue
+            try:
+                if Path(raw).is_file():
+                    kept.append(row)
+                else:
+                    removed += 1
+            except OSError:
+                removed += 1
+        if removed:
+            _last_rows[:] = kept
+    return removed
+
+
+def delete_receipt_from_cache(path: str | Path) -> bool:
+    """Cascade-remove a receipt from the extraction cache after file delete.
+
+    Removes the matching row (and all nested line items), then prunes any
+    other cache entries whose files are missing so Positionen summiert stays
+    consistent.
+    """
+    removed = remove_last_row_by_path(path)
+    prune_missing_receipt_rows()
     return removed
 
 
