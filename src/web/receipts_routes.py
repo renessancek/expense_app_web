@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import FastAPI, File, Request, UploadFile
+from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -30,6 +30,7 @@ from web.receipts_state import (
     receipt_name_taken,
     receipts_dir,
     receipts_uploads_dir,
+    remove_last_row_by_path,
     resolve_under_receipts,
     safe_upload_filename,
     set_last_rows,
@@ -98,7 +99,9 @@ def register_receipts_routes(app: FastAPI, templates: Jinja2Templates) -> None:
                 "message": message,
                 "error": error,
                 "receipts_path": str(receipts_dir()),
-                "folder_files": [p.name for p in folder_files],
+                "folder_files": [
+                    {"name": p.name, "path": str(p.resolve())} for p in folder_files
+                ],
                 "folder_count": len(folder_files),
                 "rows": rows,
                 "item_totals": item_totals,
@@ -180,6 +183,33 @@ def register_receipts_routes(app: FastAPI, templates: Jinja2Templates) -> None:
         if dup_msg:
             msg += f" {dup_msg}"
         return RedirectResponse(f"/receipts?message={quote(msg)}", status_code=303)
+
+    @app.post("/receipts/delete")
+    async def receipts_delete(_: AuthDep, path: str = Form("")):
+        resolved = resolve_under_receipts(path)
+        if resolved is None:
+            return RedirectResponse(
+                f"/receipts?error={quote('Ungültiger Dateipfad.')}",
+                status_code=303,
+            )
+        if not resolved.is_file():
+            return RedirectResponse(
+                f"/receipts?error={quote('Beleg-Datei nicht gefunden.')}",
+                status_code=303,
+            )
+        name = resolved.name
+        try:
+            resolved.unlink()
+        except OSError as err:
+            return RedirectResponse(
+                f"/receipts?error={quote(f'Datei konnte nicht gelöscht werden: {err}')}",
+                status_code=303,
+            )
+        remove_last_row_by_path(resolved)
+        return RedirectResponse(
+            f"/receipts?message={quote(f'{name} gelöscht.')}",
+            status_code=303,
+        )
 
     @app.post("/receipts/scan")
     async def receipts_scan(_: AuthDep, store: StoreDep):
