@@ -23,6 +23,7 @@ from web.receipts_state import (  # noqa: E402
     format_month_de,
     format_status_de,
     get_last_rows,
+    receipt_name_taken,
     receipts_dir,
     resolve_under_receipts,
     safe_upload_filename,
@@ -86,6 +87,18 @@ class ReceiptsStateHelpersTests(unittest.TestCase):
             second = unique_target(directory, "a.pdf")
             self.assertNotEqual(first, second)
             self.assertEqual(second.name, "a_1.pdf")
+
+    def test_receipt_name_taken_checks_root_and_uploads(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.dict(os.environ, {"EXPENSE_DATA_DIR": tmp}):
+                root = ensure_receipts_dirs()
+                self.assertFalse(receipt_name_taken("bon.pdf"))
+                (root / "bon.pdf").write_bytes(b"%PDF")
+                self.assertTrue(receipt_name_taken("bon.pdf"))
+                self.assertTrue(receipt_name_taken("path/to/bon.pdf"))
+                (root / "uploads" / "foto.jpg").write_bytes(b"x")
+                self.assertTrue(receipt_name_taken("foto.jpg"))
+                self.assertFalse(receipt_name_taken("missing.pdf"))
 
     def test_last_rows_cache(self):
         clear_last_rows()
