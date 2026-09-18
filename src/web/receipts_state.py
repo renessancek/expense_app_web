@@ -128,8 +128,21 @@ def safe_upload_filename(filename: str | None) -> str:
     return name or "upload.bin"
 
 
+def receipt_name_taken(filename: str | None) -> bool:
+    """True if basename already exists under receipts/ or receipts/uploads/."""
+    base = safe_upload_filename(filename)
+    if not base:
+        return False
+    return (receipts_dir() / base).is_file() or (
+        receipts_uploads_dir() / base
+    ).is_file()
+
+
 def unique_target(directory: Path, filename: str) -> Path:
-    """Pick a non-colliding path under ``directory`` for ``filename``."""
+    """Pick a non-colliding path under ``directory`` for ``filename``.
+
+    Kept for tests/helpers; Belege upload rejects duplicates instead.
+    """
     directory.mkdir(parents=True, exist_ok=True)
     base = safe_upload_filename(filename)
     target = directory / base
