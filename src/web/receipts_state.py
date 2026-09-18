@@ -95,6 +95,33 @@ def find_row_by_path(path: str | Path) -> dict | None:
     return None
 
 
+def remove_last_row_by_path(path: str | Path) -> bool:
+    """Drop a cached extraction row for ``path``. Returns True if removed."""
+    try:
+        target = Path(path).resolve()
+    except (OSError, RuntimeError, ValueError):
+        return False
+    removed = False
+    with _lock:
+        kept: list[dict] = []
+        for row in _last_rows:
+            raw = row.get("path")
+            if not raw:
+                kept.append(row)
+                continue
+            try:
+                same = Path(raw).resolve() == target
+            except (OSError, RuntimeError, ValueError):
+                same = str(raw) == str(path)
+            if same:
+                removed = True
+                continue
+            kept.append(row)
+        if removed:
+            _last_rows[:] = kept
+    return removed
+
+
 def resolve_under_receipts(path_str: str | Path) -> Path | None:
     """Resolve ``path_str`` and ensure it stays under the receipts root.
 
