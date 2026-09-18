@@ -27,11 +27,12 @@ from web.receipts_state import (
     format_status_de,
     format_total_de,
     get_last_rows,
+    receipt_name_taken,
     receipts_dir,
     receipts_uploads_dir,
     resolve_under_receipts,
+    safe_upload_filename,
     set_last_rows,
-    unique_target,
 )
 
 
@@ -115,6 +116,8 @@ def register_receipts_routes(app: FastAPI, templates: Jinja2Templates) -> None:
         rows = []
         saved = 0
         skipped = 0
+        duplicates: list[str] = []
+        claimed_names: set[str] = set()
         for upload in files or []:
             if not upload.filename:
                 skipped += 1
@@ -123,9 +126,15 @@ def register_receipts_routes(app: FastAPI, templates: Jinja2Templates) -> None:
             if suffix not in RECEIPT_SUFFIXES:
                 skipped += 1
                 continue
-            target = unique_target(upload_root, upload.filename)
+            base = safe_upload_filename(upload.filename)
+            if base in claimed_names or receipt_name_taken(base):
+                if base not in duplicates:
+                    duplicates.append(base)
+                continue
+            target = upload_root / base
             content = await upload.read()
             target.write_bytes(content)
+            claimed_names.add(base)
             saved += 1
             try:
                 result = extract_receipt(target, categorizer=store.categorizer)
@@ -145,14 +154,31 @@ def register_receipts_routes(app: FastAPI, templates: Jinja2Templates) -> None:
             for row in rows:
                 previous[row.get("path")] = row
             set_last_rows(list(previous.values()))
-        if saved == 0:
+
+        dup_msg = ""
+        if duplicates:
+            listed = ", ".join(duplicates)
+            if len(duplicates) == 1:
+                dup_msg = f"{listed} ist bereits vorhanden."
+            else:
+                dup_msg = f"Bereits vorhanden: {listed}."
+
+        if saved == 0 and not duplicates:
             return RedirectResponse(
                 f"/receipts?error={quote('Keine gültigen Bild-/PDF-Dateien hochgeladen.')}",
                 status_code=303,
             )
+        if saved == 0 and duplicates:
+            return RedirectResponse(
+                f"/receipts?error={quote(dup_msg)}",
+                status_code=303,
+            )
+
         msg = f"{saved} Datei(en) hochgeladen und extrahiert."
         if skipped:
             msg += f" {skipped} übersprungen."
+        if dup_msg:
+            msg += f" {dup_msg}"
         return RedirectResponse(f"/receipts?message={quote(msg)}", status_code=303)
 
     @app.post("/receipts/scan")
