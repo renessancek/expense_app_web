@@ -76,28 +76,33 @@
 
   {% if item_totals %}
   <div class="card">
-    <h2>Positionen summiert ({{ item_totals|length }})</h2>
-    <p class="muted">Gleicher Text (exakt wie extrahiert) pro Kalendermonat — nur Beträge addiert.</p>
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Monat</th>
-            <th>Beschreibung</th>
-            <th class="num">Betrag</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in item_totals %}
-          <tr>
-            <td>{{ row.month|month_de }}</td>
-            <td>{{ row.description }}</td>
-            <td class="num">{{ "%.2f"|format(row.amount) }} €</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+    <h2>Positionen summiert ({{ item_totals|length }} Monat{% if item_totals|length != 1 %}e{% endif %})</h2>
+    <p class="muted">Gleicher Text (exakt wie extrahiert) pro Kalendermonat — nur Beträge addiert. Monate standardmäßig zugeklappt; innerhalb eines Monats nach Betrag absteigend.</p>
+    {% for group in item_totals %}
+    <details class="collapse nested">
+      <summary>
+        <h3>{{ group.month|month_de }} · {{ "%.2f"|format(group.total) }} € · {{ group.rows|length }} Position{% if group.rows|length != 1 %}en{% endif %}</h3>
+      </summary>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Beschreibung</th>
+              <th class="num">Betrag</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in group.rows %}
+            <tr>
+              <td>{{ row.description }}</td>
+              <td class="num">{{ "%.2f"|format(row.amount) }} €</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
+    {% endfor %}
   </div>
   {% endif %}
 {% endblock %}
