@@ -39,11 +39,33 @@ def ensure_receipts_dirs() -> Path:
     return root
 
 
+def _row_date(row: dict) -> str:
+    """Best available ISO date string for a receipt row."""
+    date = row.get("date")
+    if isinstance(date, str) and date.strip():
+        return date.strip()
+    result = row.get("result") or {}
+    date = result.get("date")
+    if isinstance(date, str) and date.strip():
+        return date.strip()
+    return ""
+
+
+def sort_receipt_rows_by_date_desc(rows: list[dict] | None) -> list[dict]:
+    """Sort extraction rows by date descending; undated rows last."""
+    def key(row: dict) -> tuple:
+        date = _row_date(row)
+        # YYYY-MM-DD sorts lexicographically; empty dates last.
+        return (0 if date else 1, date)
+
+    return sorted(rows or [], key=key, reverse=True)
+
+
 def set_last_rows(rows: list[dict]) -> None:
-    """Replace the process-wide last extraction result list."""
+    """Replace the process-wide last extraction result list (date desc)."""
     global _last_rows
     with _lock:
-        _last_rows = list(rows or [])
+        _last_rows = sort_receipt_rows_by_date_desc(list(rows or []))
 
 
 def get_last_rows() -> list[dict]:
