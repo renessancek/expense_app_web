@@ -123,7 +123,7 @@ class ReceiptsStateHelpersTests(unittest.TestCase):
         self.assertEqual(format_date_de("2024-01-15"), "15.01.2024")
         self.assertEqual(format_month_de("2024-01"), "01.2024")
 
-    def test_aggregate_receipt_items_exact_text_and_month(self):
+    def test_aggregate_receipt_items_grouped_by_month_amount_desc(self):
         rows = [
             {
                 "status": "Extracted",
@@ -144,6 +144,7 @@ class ReceiptsStateHelpersTests(unittest.TestCase):
                     "date": "2024-02-01",
                     "items": [
                         {"description": "Alpromil", "quantity": 1, "amount": 3.99},
+                        {"description": "Brot", "quantity": 1, "amount": 2.50},
                     ],
                 },
             },
@@ -153,14 +154,21 @@ class ReceiptsStateHelpersTests(unittest.TestCase):
                 "result": None,
             },
         ]
-        totals = aggregate_receipt_items(rows)
-        by_key = {(r["month"], r["description"]): r["amount"] for r in totals}
-        self.assertAlmostEqual(by_key[("2024-01", "Alpromil")], 7.98)
-        self.assertAlmostEqual(by_key[("2024-01", "Milch")], 1.29)
-        self.assertAlmostEqual(by_key[("2024-02", "Alpromil")], 3.99)
-        self.assertNotIn("quantity", totals[0])
-        # Exact match: different casing does not merge
-        self.assertEqual(len(totals), 3)
+        groups = aggregate_receipt_items(rows)
+        self.assertEqual([g["month"] for g in groups], ["2024-02", "2024-01"])
+
+        feb = groups[0]
+        self.assertAlmostEqual(feb["total"], 6.49)
+        self.assertEqual([r["description"] for r in feb["rows"]], ["Alpromil", "Brot"])
+        self.assertAlmostEqual(feb["rows"][0]["amount"], 3.99)
+
+        jan = groups[1]
+        self.assertAlmostEqual(jan["total"], 9.27)
+        # Amount descending within month: Alpromil 7.98 before Milch 1.29
+        self.assertEqual([r["description"] for r in jan["rows"]], ["Alpromil", "Milch"])
+        self.assertAlmostEqual(jan["rows"][0]["amount"], 7.98)
+        self.assertAlmostEqual(jan["rows"][1]["amount"], 1.29)
+        self.assertNotIn("quantity", jan["rows"][0])
 
 
 if __name__ == "__main__":
