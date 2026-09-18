@@ -30,52 +30,56 @@
   </div>
 
   <div class="card">
-    <h2>Letzte Extraktion ({{ rows|length }})</h2>
-    {% if rows %}
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Datei</th>
-            <th>Status</th>
-            <th>Händler</th>
-            <th>Datum</th>
-            <th class="num">Summe</th>
-            <th class="num">Positionen</th>
-            <th>Fehler/Hinweise</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in rows %}
-          <tr class="{% if row.status != 'Extracted' %}row-warn{% endif %}">
-            <td>{{ row.file }}</td>
-            <td class="{% if row.status == 'Extracted' %}status-ok{% else %}status-bad{% endif %}">
-              {{ row.status|status_de }}
-            </td>
-            <td>{{ row.merchant or "—" }}</td>
-            <td>{{ row.date|date_de or "—" }}</td>
-            <td class="num">{% if row.total is not none %}{{ row.total|total_de }}{% else %}—{% endif %}</td>
-            <td class="num">{{ row.item_count }}</td>
-            <td class="muted">
-              {% if row.error %}{{ row.error }}{% elif row.result and row.result.notes %}{{ row.result.notes }}{% else %}—{% endif %}
-            </td>
-            <td style="white-space:nowrap;">
-              <a href="/receipts/detail?path={{ row.path|urlencode }}">Details</a>
-              <form action="/receipts/delete" method="post" style="display:inline;"
-                    onsubmit="return confirm('Beleg „{{ row.file }}“ wirklich löschen?');">
-                <input type="hidden" name="path" value="{{ row.path }}">
-                <button type="submit" class="danger">Löschen</button>
-              </form>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% else %}
-    <p class="muted">Noch keine Extraktion. Dateien hochladen oder den Ordner scannen.</p>
-    {% endif %}
+    <details class="collapse">
+      <summary>
+        <h2>Letzte Extraktion ({{ rows|length }})</h2>
+      </summary>
+      {% if rows %}
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Datei</th>
+              <th>Status</th>
+              <th>Händler</th>
+              <th>Datum</th>
+              <th class="num">Summe</th>
+              <th class="num">Positionen</th>
+              <th>Fehler/Hinweise</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+            <tr class="{% if row.status != 'Extracted' %}row-warn{% endif %}">
+              <td>{{ row.file }}</td>
+              <td class="{% if row.status == 'Extracted' %}status-ok{% else %}status-bad{% endif %}">
+                {{ row.status|status_de }}
+              </td>
+              <td>{{ row.merchant or "—" }}</td>
+              <td>{{ row.date|date_de or "—" }}</td>
+              <td class="num">{% if row.total is not none %}{{ row.total|total_de }}{% else %}—{% endif %}</td>
+              <td class="num">{{ row.item_count }}</td>
+              <td class="muted">
+                {% if row.error %}{{ row.error }}{% elif row.result and row.result.notes %}{{ row.result.notes }}{% else %}—{% endif %}
+              </td>
+              <td style="white-space:nowrap;">
+                <a href="/receipts/detail?path={{ row.path|urlencode }}">Details</a>
+                <form action="/receipts/delete" method="post" style="display:inline;"
+                      onsubmit="return confirm('Beleg „{{ row.file }}“ wirklich löschen?');">
+                  <input type="hidden" name="path" value="{{ row.path }}">
+                  <button type="submit" class="danger">Löschen</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="muted">Noch keine Extraktion. Dateien hochladen oder den Ordner scannen.</p>
+      {% endif %}
+    </details>
   </div>
 
   {% if item_totals %}
