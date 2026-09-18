@@ -25,6 +25,7 @@ from web.receipts_state import (  # noqa: E402
     get_last_rows,
     receipt_name_taken,
     receipts_dir,
+    remove_last_row_by_path,
     resolve_under_receipts,
     safe_upload_filename,
     set_last_rows,
@@ -106,6 +107,25 @@ class ReceiptsStateHelpersTests(unittest.TestCase):
         self.assertEqual(len(get_last_rows()), 1)
         clear_last_rows()
         self.assertEqual(get_last_rows(), [])
+
+    def test_remove_last_row_by_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            keep = Path(tmp) / "keep.pdf"
+            drop = Path(tmp) / "drop.pdf"
+            keep.write_bytes(b"1")
+            drop.write_bytes(b"2")
+            clear_last_rows()
+            set_last_rows(
+                [
+                    {"path": str(keep.resolve()), "file": "keep.pdf"},
+                    {"path": str(drop.resolve()), "file": "drop.pdf"},
+                ]
+            )
+            self.assertTrue(remove_last_row_by_path(drop))
+            files = [r["file"] for r in get_last_rows()]
+            self.assertEqual(files, ["keep.pdf"])
+            self.assertFalse(remove_last_row_by_path(drop))
+            clear_last_rows()
 
     def test_last_rows_sorted_by_date_descending(self):
         clear_last_rows()
