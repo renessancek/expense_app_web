@@ -6,9 +6,7 @@
 
   <div class="card">
     <h2>Hochladen / Ordner scannen</h2>
-    <p class="muted">Belege-Ordner: <code>{{ receipts_path }}</code>
-      · {{ folder_count }} Datei(en) im Ordner
-    </p>
+    <p class="muted">Belege-Ordner: <code>{{ receipts_path }}</code></p>
     <p class="muted">Extraktion zeigt Händler, Datum, Summe und Positionen — es wird nichts in die Transaktionen geschrieben.
       Digitale PDFs brauchen kein Tesseract; gescannte PDFs und Fotos schon (im Docker-Image enthalten).</p>
     <div class="row">
@@ -29,36 +27,6 @@
         </div>
       </form>
     </div>
-    {% if folder_files %}
-    <details class="collapse" style="margin-top:1rem;">
-      <summary><h3>Dateien im Ordner ({{ folder_count }})</h3></summary>
-      <div class="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>Datei</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for f in folder_files %}
-            <tr>
-              <td>{{ f.name }}</td>
-              <td style="white-space:nowrap;">
-                <a href="/receipts/detail?path={{ f.path|urlencode }}">Details</a>
-                <form action="/receipts/delete" method="post" style="display:inline;"
-                      onsubmit="return confirm('Beleg „{{ f.name }}“ wirklich löschen?');">
-                  <input type="hidden" name="path" value="{{ f.path }}">
-                  <button type="submit" class="danger">Löschen</button>
-                </form>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </details>
-    {% endif %}
   </div>
 
   <div class="card">
