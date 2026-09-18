@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
-  <h1>Regeln</h1>
+  <h1>Kategorien</h1>
   {% if message %}<div class="flash ok">{{ message }}</div>{% endif %}
   {% if error %}<div class="flash err">{{ error }}</div>{% endif %}
 
   <div class="card">
-    <h2>Regel hinzufügen</h2>
+    <h2>Kategorie hinzufügen</h2>
     <form action="/rules/add" method="post" class="row">
       <div class="field">
         <label for="category">Kategorie</label>
@@ -45,7 +45,7 @@
   </div>
 
   <div class="card">
-    <h2>Vorhandene Regeln ({{ rules|length }})</h2>
+    <h2>Vorhandene Kategorien ({{ rules|length }})</h2>
     {% for rule in rules %}
     <div class="rule-row">
       <div class="field">
@@ -63,7 +63,7 @@
           <button id="upd-{{ loop.index }}" type="submit">Aktualisieren</button>
         </div>
       </form>
-      <form action="/rules/delete" method="post" style="display:contents;" onsubmit="return confirm('Regel „{{ rule.category }}“ löschen?');">
+      <form action="/rules/delete" method="post" style="display:contents;" onsubmit="return confirm('Kategorie „{{ rule.category }}“ löschen?');">
         <input type="hidden" name="category" value="{{ rule.category }}">
         <div class="field">
           <label class="label-spacer" for="del-{{ loop.index }}">&nbsp;</label>
@@ -72,7 +72,7 @@
       </form>
     </div>
     {% else %}
-    <p class="muted">Noch keine Regeln. Importiere eine JSON/CSV-Datei oder lege eine Regel an.</p>
+    <p class="muted">Noch keine Kategorien. Importiere eine JSON/CSV-Datei oder lege eine Kategorie an.</p>
     {% endfor %}
   </div>
 {% endblock %}
