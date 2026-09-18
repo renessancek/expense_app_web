@@ -18,11 +18,13 @@ from receipt_extractor import extract_receipt_folder  # noqa: E402
 from web.receipts_state import (  # noqa: E402
     aggregate_receipt_items,
     clear_last_rows,
+    delete_receipt_from_cache,
     ensure_receipts_dirs,
     format_date_de,
     format_month_de,
     format_status_de,
     get_last_rows,
+    prune_missing_receipt_rows,
     receipt_name_taken,
     receipts_dir,
     remove_last_row_by_path,
@@ -125,6 +127,77 @@ class ReceiptsStateHelpersTests(unittest.TestCase):
             files = [r["file"] for r in get_last_rows()]
             self.assertEqual(files, ["keep.pdf"])
             self.assertFalse(remove_last_row_by_path(drop))
+            clear_last_rows()
+
+    def test_delete_receipt_cascades_positionen_out_of_totals(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            keep = Path(tmp) / "keep.pdf"
+            drop = Path(tmp) / "drop.pdf"
+            keep.write_bytes(b"1")
+            drop.write_bytes(b"2")
+            clear_last_rows()
+            set_last_rows(
+                [
+                    {
+                        "path": str(keep.resolve()),
+                        "file": "keep.pdf",
+                        "status": "Extracted",
+                        "date": "2024-01-10",
+                        "result": {
+                            "date": "2024-01-10",
+                            "items": [
+                                {"description": "Milch", "amount": 1.29},
+                            ],
+                        },
+                    },
+                    {
+                        "path": str(drop.resolve()),
+                        "file": "drop.pdf",
+                        "status": "Extracted",
+                        "date": "2024-01-11",
+                        "result": {
+                            "date": "2024-01-11",
+                            "items": [
+                                {"description": "Alpromil", "amount": 3.99},
+                                {"description": "Milch", "amount": 1.29},
+                            ],
+                        },
+                    },
+                ]
+            )
+            before = aggregate_receipt_items(get_last_rows())
+            jan = before[0]
+            by_desc = {r["description"]: r["amount"] for r in jan["rows"]}
+            self.assertAlmostEqual(by_desc["Alpromil"], 3.99)
+            self.assertAlmostEqual(by_desc["Milch"], 2.58)
+
+            drop.unlink()
+            self.assertTrue(delete_receipt_from_cache(drop))
+
+            after = aggregate_receipt_items(get_last_rows())
+            self.assertEqual(len(after), 1)
+            only = {r["description"]: r["amount"] for r in after[0]["rows"]}
+            self.assertEqual(list(only), ["Milch"])
+            self.assertAlmostEqual(only["Milch"], 1.29)
+            self.assertNotIn("Alpromil", only)
+            clear_last_rows()
+
+    def test_prune_missing_receipt_rows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            keep = Path(tmp) / "keep.pdf"
+            gone = Path(tmp) / "gone.pdf"
+            keep.write_bytes(b"1")
+            gone.write_bytes(b"2")
+            clear_last_rows()
+            set_last_rows(
+                [
+                    {"path": str(keep.resolve()), "file": "keep.pdf"},
+                    {"path": str(gone.resolve()), "file": "gone.pdf"},
+                ]
+            )
+            gone.unlink()
+            self.assertEqual(prune_missing_receipt_rows(), 1)
+            self.assertEqual([r["file"] for r in get_last_rows()], ["keep.pdf"])
             clear_last_rows()
 
     def test_last_rows_sorted_by_date_descending(self):
