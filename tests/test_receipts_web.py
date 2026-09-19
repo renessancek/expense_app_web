@@ -238,6 +238,8 @@ class ReceiptsStateHelpersTests(unittest.TestCase):
             {
                 "status": "Extracted",
                 "date": "2024-01-10",
+                "path": "/data/Rechnungen/jan.pdf",
+                "file": "jan.pdf",
                 "result": {
                     "date": "2024-01-10",
                     "items": [
@@ -250,6 +252,8 @@ class ReceiptsStateHelpersTests(unittest.TestCase):
             {
                 "status": "Extracted",
                 "date": "2024-02-01",
+                "path": "/data/Rechnungen/feb.pdf",
+                "file": "feb.pdf",
                 "result": {
                     "date": "2024-02-01",
                     "items": [
@@ -271,6 +275,9 @@ class ReceiptsStateHelpersTests(unittest.TestCase):
         self.assertAlmostEqual(feb["total"], 6.49)
         self.assertEqual([r["description"] for r in feb["rows"]], ["Alpromil", "Brot"])
         self.assertAlmostEqual(feb["rows"][0]["amount"], 3.99)
+        self.assertEqual(feb["rows"][0]["path"], "/data/Rechnungen/feb.pdf")
+        self.assertEqual(feb["rows"][0]["file"], "feb.pdf")
+        self.assertEqual(feb["rows"][1]["path"], "/data/Rechnungen/feb.pdf")
 
         jan = groups[1]
         self.assertAlmostEqual(jan["total"], 9.27)
@@ -279,6 +286,40 @@ class ReceiptsStateHelpersTests(unittest.TestCase):
         self.assertAlmostEqual(jan["rows"][0]["amount"], 7.98)
         self.assertAlmostEqual(jan["rows"][1]["amount"], 1.29)
         self.assertNotIn("quantity", jan["rows"][0])
+        self.assertEqual(jan["rows"][0]["path"], "/data/Rechnungen/jan.pdf")
+        self.assertEqual(jan["rows"][0]["file"], "jan.pdf")
+        self.assertEqual(jan["rows"][1]["path"], "/data/Rechnungen/jan.pdf")
+
+    def test_aggregate_keeps_first_receipt_path_when_descriptions_merge(self):
+        rows = [
+            {
+                "status": "Extracted",
+                "date": "2024-03-01",
+                "path": "/data/Rechnungen/a.pdf",
+                "file": "a.pdf",
+                "result": {
+                    "date": "2024-03-01",
+                    "items": [{"description": "Milch", "amount": 1.0}],
+                },
+            },
+            {
+                "status": "Extracted",
+                "date": "2024-03-15",
+                "path": "/data/Rechnungen/b.pdf",
+                "file": "b.pdf",
+                "result": {
+                    "date": "2024-03-15",
+                    "items": [{"description": "Milch", "amount": 2.0}],
+                },
+            },
+        ]
+        groups = aggregate_receipt_items(rows)
+        self.assertEqual(len(groups), 1)
+        milk = groups[0]["rows"][0]
+        self.assertAlmostEqual(milk["amount"], 3.0)
+        # First contributing receipt stays the detail link target.
+        self.assertEqual(milk["path"], "/data/Rechnungen/a.pdf")
+        self.assertEqual(milk["file"], "a.pdf")
 
 
 
