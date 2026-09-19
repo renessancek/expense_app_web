@@ -363,6 +363,34 @@ class ReceiptsStateHelpersTests(unittest.TestCase):
 
 
 
+    def test_aggregate_drops_negative_amounts(self):
+        rows = [
+            {
+                "status": "Extracted",
+                "date": "2024-09-01",
+                "path": "/data/Rechnungen/a.pdf",
+                "file": "a.pdf",
+                "result": {
+                    "date": "2024-09-01",
+                    "items": [
+                        {"description": "Milch", "amount": 1.29},
+                        {"description": "Leergut", "amount": -0.25},
+                        {"description": "Pfand", "amount": -1.00},
+                        {"description": "Brot", "amount": 2.50},
+                    ],
+                },
+            },
+        ]
+        groups = aggregate_receipt_items(rows)
+        self.assertEqual(len(groups), 1)
+        labels = [r["description"] for r in groups[0]["rows"]]
+        self.assertEqual(labels, ["Brot", "Milch"])
+        self.assertNotIn("Leergut", labels)
+        self.assertNotIn("Pfand", labels)
+        self.assertAlmostEqual(groups[0]["total"], 3.79)
+
+
+
 class QuantityDisplayLineTests(unittest.TestCase):
     def test_is_quantity_display_line(self):
         self.assertTrue(is_quantity_display_line("2 x 2.19"))

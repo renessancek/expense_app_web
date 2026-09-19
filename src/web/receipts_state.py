@@ -286,7 +286,8 @@ def aggregate_receipt_items(rows: list[dict] | None) -> list[dict]:
     Descriptions mapped in ``load_receipt_item_categories()`` (exact text) that
     share a category are summed into one row labeled with that category name.
     Lines without a category stay as their own description rows (exact text).
-    Quantity-display lines are skipped. Returns month groups newest-first;
+    Quantity-display lines and negative amounts are skipped. Returns month
+    groups newest-first;
     within each month, rows sorted by amount descending. Each group:
     ``{month, rows: [{description, amount, path, file}, ...], total}``.
     ``path`` / ``file`` are from the first contributing receipt.
@@ -314,6 +315,16 @@ def aggregate_receipt_items(rows: list[dict] | None) -> list[dict]:
             # Skip OCR quantity-display lines like "2 x 2.19" (no product name).
             if is_quantity_display_line(description):
                 continue
+            amount = item.get("amount")
+            try:
+                if amount is None:
+                    continue
+                value = float(amount)
+            except (TypeError, ValueError):
+                continue
+            # Drop refunds / negative OCR lines from Positionen summiert.
+            if value < 0:
+                continue
             category = categories.get(description)
             if not category:
                 item_cat = item.get("category")
@@ -331,15 +342,13 @@ def aggregate_receipt_items(rows: list[dict] | None) -> list[dict]:
                     "file": receipt_file if isinstance(receipt_file, str) else None,
                 }
                 buckets[key] = bucket
-            amount = item.get("amount")
-            try:
-                if amount is not None:
-                    bucket["amount"] += float(amount)
-            except (TypeError, ValueError):
-                pass
+            bucket["amount"] += value
 
     by_month: dict[str, list[dict]] = {}
     for (month, _label), bucket in buckets.items():
+        # Remove buckets that somehow stayed negative (should not happen).
+        if float(bucket["amount"]) <= 0:
+            continue
         by_month.setdefault(month, []).append(bucket)
 
     groups: list[dict] = []
