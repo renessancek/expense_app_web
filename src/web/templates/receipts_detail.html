@@ -13,7 +13,7 @@
     {% endif %}
     <p class="muted">Originaldatei:
       {% if path %}
-      <a href="/receipts/file?path={{ path|urlencode }}" target="_blank" rel="noopener"><code>{{ path }}</code></a>
+      <a href="/receipts/file?path={{ path|urlencode }}" target="_blank" rel="noopener noreferrer"><code>{{ path }}</code></a>
       {% else %}—{% endif %}
     </p>
     <form action="/receipts/delete" method="post"
