@@ -85,7 +85,7 @@
   {% if item_totals %}
   <div class="card">
     <h2>Positionen summiert ({{ item_totals|length }} Monat{% if item_totals|length != 1 %}e{% endif %})</h2>
-    <p class="muted">Gleicher Text (exakt wie extrahiert) pro Kalendermonat — nur Beträge addiert. Monate standardmäßig zugeklappt; innerhalb eines Monats nach Betrag absteigend.</p>
+    <p class="muted">Gleiche Belegzeilen-Kategorie wird pro Monat zu einer Summe unter dem Kategorienamen zusammengefasst; Zeilen ohne Kategorie bleiben einzeln. Monate standardmäßig zugeklappt; innerhalb eines Monats nach Betrag absteigend.</p>
     {% for group in item_totals %}
     <details class="collapse nested">
       <summary>
@@ -95,7 +95,7 @@
         <table>
           <thead>
             <tr>
-              <th>Beschreibung</th>
+              <th>Position</th>
               <th class="num">Betrag</th>
               <th>Beleg</th>
             </tr>

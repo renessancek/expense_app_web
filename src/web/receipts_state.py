@@ -281,16 +281,17 @@ def _month_sort_key(month: str) -> tuple:
 
 
 def aggregate_receipt_items(rows: list[dict] | None) -> list[dict]:
-    """Sum line-item amounts by calendar month + exact description text.
+    """Sum line items by calendar month, grouping by Belegzeilen category.
 
-    Matching is case- and whitespace-sensitive (as extracted). Only successful
-    extractions contribute. Quantity-display lines like ``2 x 2.19`` (and bare
-    ``2 x`` descriptions from older parses) are skipped. Returns month groups
-    newest-first; within each month, rows are sorted by amount descending.
-    Each group: ``{month, rows: [{description, amount, path, file}, ...],
-    total}``. ``path`` / ``file`` point at the first contributing receipt so
-    the Positionen table can link to ``/receipts/detail``.
+    Descriptions mapped in ``load_receipt_item_categories()`` (exact text) that
+    share a category are summed into one row labeled with that category name.
+    Lines without a category stay as their own description rows (exact text).
+    Quantity-display lines are skipped. Returns month groups newest-first;
+    within each month, rows sorted by amount descending. Each group:
+    ``{month, rows: [{description, amount, path, file}, ...], total}``.
+    ``path`` / ``file`` are from the first contributing receipt.
     """
+    categories = load_receipt_item_categories()
     buckets: dict[tuple[str, str], dict] = {}
     for row in rows or []:
         if row.get("status") != "Extracted":
@@ -307,14 +308,24 @@ def aggregate_receipt_items(rows: list[dict] | None) -> list[dict]:
             description = item.get("description")
             if not isinstance(description, str) or description == "":
                 continue
+            description = description.strip()
+            if not description:
+                continue
             # Skip OCR quantity-display lines like "2 x 2.19" (no product name).
             if is_quantity_display_line(description):
                 continue
-            key = (month, description)
+            category = categories.get(description)
+            if not category:
+                item_cat = item.get("category")
+                if isinstance(item_cat, str) and item_cat.strip():
+                    category = item_cat.strip()
+            # Bucket key: category name when assigned, else exact description.
+            label = category if category else description
+            key = (month, label)
             bucket = buckets.get(key)
             if bucket is None:
                 bucket = {
-                    "description": description,
+                    "description": label,
                     "amount": 0.0,
                     "path": receipt_path if isinstance(receipt_path, str) else None,
                     "file": receipt_file if isinstance(receipt_file, str) else None,
@@ -328,7 +339,7 @@ def aggregate_receipt_items(rows: list[dict] | None) -> list[dict]:
                 pass
 
     by_month: dict[str, list[dict]] = {}
-    for (month, _description), bucket in buckets.items():
+    for (month, _label), bucket in buckets.items():
         by_month.setdefault(month, []).append(bucket)
 
     groups: list[dict] = []

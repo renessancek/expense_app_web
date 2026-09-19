@@ -326,6 +326,43 @@ class ReceiptsStateHelpersTests(unittest.TestCase):
 
 
 
+    def test_aggregate_sums_same_category_keeps_uncategorized(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.dict(os.environ, {"EXPENSE_DATA_DIR": tmp}):
+                set_receipt_item_category("Bio-Bananen", "Bananen")
+                set_receipt_item_category("Bananen", "Bananen")
+                set_receipt_item_category("SPG-Bananen", "Bananen")
+                rows = [
+                    {
+                        "status": "Extracted",
+                        "date": "2024-08-01",
+                        "path": "/data/Rechnungen/a.pdf",
+                        "file": "a.pdf",
+                        "result": {
+                            "date": "2024-08-01",
+                            "items": [
+                                {"description": "Bio-Bananen", "amount": 1.50},
+                                {"description": "Bananen", "amount": 2.00},
+                                {"description": "SPG-Bananen", "amount": 1.20},
+                                {"description": "Milch", "amount": 1.29},
+                            ],
+                        },
+                    },
+                ]
+                groups = aggregate_receipt_items(rows)
+                self.assertEqual(len(groups), 1)
+                labels = [r["description"] for r in groups[0]["rows"]]
+                # Category sum first by amount (4.70), then Milch (1.29)
+                self.assertEqual(labels, ["Bananen", "Milch"])
+                by = {r["description"]: r["amount"] for r in groups[0]["rows"]}
+                self.assertAlmostEqual(by["Bananen"], 4.70)
+                self.assertAlmostEqual(by["Milch"], 1.29)
+                self.assertNotIn("Bio-Bananen", by)
+                self.assertNotIn("SPG-Bananen", by)
+
+
+
+
 class QuantityDisplayLineTests(unittest.TestCase):
     def test_is_quantity_display_line(self):
         self.assertTrue(is_quantity_display_line("2 x 2.19"))
