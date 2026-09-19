@@ -286,7 +286,9 @@ def aggregate_receipt_items(rows: list[dict] | None) -> list[dict]:
     extractions contribute. Quantity-display lines like ``2 x 2.19`` (and bare
     ``2 x`` descriptions from older parses) are skipped. Returns month groups
     newest-first; within each month, rows are sorted by amount descending.
-    Each group: ``{month, rows: [{description, amount}, ...], total}``.
+    Each group: ``{month, rows: [{description, amount, path, file}, ...],
+    total}``. ``path`` / ``file`` point at the first contributing receipt so
+    the Positionen table can link to ``/receipts/detail``.
     """
     buckets: dict[tuple[str, str], dict] = {}
     for row in rows or []:
@@ -298,6 +300,8 @@ def aggregate_receipt_items(rows: list[dict] | None) -> list[dict]:
             month = date[:7]
         else:
             month = NO_DATE_MONTH
+        receipt_path = row.get("path")
+        receipt_file = row.get("file")
         for item in result.get("items") or []:
             description = item.get("description")
             if not isinstance(description, str) or description == "":
@@ -311,6 +315,8 @@ def aggregate_receipt_items(rows: list[dict] | None) -> list[dict]:
                 bucket = {
                     "description": description,
                     "amount": 0.0,
+                    "path": receipt_path if isinstance(receipt_path, str) else None,
+                    "file": receipt_file if isinstance(receipt_file, str) else None,
                 }
                 buckets[key] = bucket
             amount = item.get("amount")
