@@ -28,6 +28,8 @@ from web.receipts_state import (  # noqa: E402
     format_month_de,
     format_status_de,
     get_last_rows,
+    list_receipt_line_category_rows,
+    load_receipt_item_categories,
     prune_missing_receipt_rows,
     receipt_name_taken,
     receipts_dir,
@@ -35,6 +37,7 @@ from web.receipts_state import (  # noqa: E402
     resolve_under_receipts,
     safe_upload_filename,
     set_last_rows,
+    set_receipt_item_category,
     sort_receipt_rows_by_date_desc,
     unique_target,
 )
@@ -382,6 +385,44 @@ class QuantityDisplayLineTests(unittest.TestCase):
             ["Alpro Rote Früchte Dattel B", "Alpro Blueb. Muffin B"],
         )
         self.assertAlmostEqual(groups[0]["total"], 9.76)
+
+
+
+
+class ReceiptItemCategoryTests(unittest.TestCase):
+    def test_assign_list_and_clear(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.dict(os.environ, {"EXPENSE_DATA_DIR": tmp}):
+                set_receipt_item_category("Banane", "Obst")
+                set_receipt_item_category("Bio-Banane", "Obst")
+                self.assertEqual(
+                    load_receipt_item_categories(),
+                    {"Banane": "Obst", "Bio-Banane": "Obst"},
+                )
+                rows = [
+                    {
+                        "status": "Extracted",
+                        "result": {
+                            "items": [
+                                {"description": "Banane", "amount": 1.0},
+                                {"description": "Bananen", "amount": 2.0},
+                                {"description": "2 x 2.19", "amount": 2.19},
+                            ]
+                        },
+                    }
+                ]
+                lines = list_receipt_line_category_rows(rows)
+                by_desc = {r["description"]: r for r in lines}
+                self.assertIn("Banane", by_desc)
+                self.assertIn("Bananen", by_desc)
+                self.assertIn("Bio-Banane", by_desc)
+                self.assertNotIn("2 x 2.19", by_desc)
+                self.assertEqual(by_desc["Banane"]["category"], "Obst")
+                self.assertEqual(by_desc["Banane"]["count"], 1)
+                self.assertEqual(by_desc["Bananen"]["category"], "")
+                self.assertEqual(by_desc["Bio-Banane"]["count"], 0)
+                set_receipt_item_category("Banane", "")
+                self.assertNotIn("Banane", load_receipt_item_categories())
 
 
 

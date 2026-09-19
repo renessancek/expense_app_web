@@ -27,6 +27,7 @@ from web.receipts_state import (
     format_status_de,
     format_total_de,
     get_last_rows,
+    list_receipt_line_category_rows,
     prune_missing_receipt_rows,
     receipt_name_taken,
     receipts_dir,
@@ -34,6 +35,7 @@ from web.receipts_state import (
     resolve_under_receipts,
     safe_upload_filename,
     set_last_rows,
+    set_receipt_item_category,
 )
 
 
@@ -256,3 +258,52 @@ def register_receipts_routes(app: FastAPI, templates: Jinja2Templates) -> None:
                 "path": str(resolved),
             },
         )
+
+    @app.get("/receipts/categories", response_class=HTMLResponse)
+    async def receipts_categories_page(
+        request: Request,
+        _: AuthDep,
+        store: StoreDep,
+        message: str = "",
+        error: str = "",
+    ):
+        """Assign categories to unique Belegzeilen descriptions."""
+        prune_missing_receipt_rows()
+        lines = list_receipt_line_category_rows(get_last_rows())
+        suggestions = sorted(
+            set(store.categorizer.get_all_categories())
+            | {r["category"] for r in lines if r.get("category")},
+            key=str.casefold,
+        )
+        return templates.TemplateResponse(
+            request,
+            "receipt_categories.html",
+            {
+                "title": "Belegzeilen-Kategorien",
+                "nav": "receipt_categories",
+                "lines": lines,
+                "category_suggestions": suggestions,
+                "message": message,
+                "error": error,
+            },
+        )
+
+    @app.post("/receipts/categories/assign")
+    async def receipts_categories_assign(
+        _: AuthDep,
+        description: str = Form(""),
+        category: str = Form(""),
+    ):
+        description = (description or "").strip()
+        category = (category or "").strip()
+        if not description:
+            return RedirectResponse(
+                f"/receipts/categories?error={quote('Beschreibung fehlt.')}",
+                status_code=303,
+            )
+        set_receipt_item_category(description, category)
+        if category:
+            msg = quote(f"Kategorie „{category}“ für „{description}“ gespeichert.")
+        else:
+            msg = quote(f"Zuordnung für „{description}“ gelöscht.")
+        return RedirectResponse(f"/receipts/categories?message={msg}", status_code=303)
