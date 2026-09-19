@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from threading import Lock
 
@@ -344,3 +345,97 @@ def aggregate_receipt_items(rows: list[dict] | None) -> list[dict]:
             }
         )
     return groups
+
+
+RECEIPT_ITEM_CATEGORIES_FILENAME = "receipt_item_categories.json"
+
+
+def receipt_item_categories_path() -> Path:
+    """JSON map of exact Belegzeile description → category name."""
+    return data_root_for_receipts() / RECEIPT_ITEM_CATEGORIES_FILENAME
+
+
+def load_receipt_item_categories() -> dict[str, str]:
+    """Return description→category assignments (empty dict if missing/invalid)."""
+    path = receipt_item_categories_path()
+    if not path.is_file():
+        return {}
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, str] = {}
+    for key, value in raw.items():
+        if not isinstance(key, str) or not key.strip():
+            continue
+        if not isinstance(value, str) or not value.strip():
+            continue
+        out[key.strip()] = value.strip()
+    return out
+
+
+def save_receipt_item_categories(mapping: dict[str, str]) -> None:
+    """Persist description→category map (sorted keys for stable diffs)."""
+    clean: dict[str, str] = {}
+    for key, value in (mapping or {}).items():
+        if not isinstance(key, str) or not key.strip():
+            continue
+        if not isinstance(value, str) or not value.strip():
+            continue
+        clean[key.strip()] = value.strip()
+    path = receipt_item_categories_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    ordered = {k: clean[k] for k in sorted(clean.keys(), key=str.casefold)}
+    payload = json.dumps(ordered, ensure_ascii=False, indent=2) + chr(10)
+    path.write_text(payload, encoding="utf-8")
+
+
+def set_receipt_item_category(description: str, category: str) -> None:
+    """Assign ``category`` to ``description``, or clear when category is empty."""
+    description = (description or "").strip()
+    category = (category or "").strip()
+    if not description:
+        return
+    mapping = load_receipt_item_categories()
+    if not category:
+        mapping.pop(description, None)
+    else:
+        mapping[description] = category
+    save_receipt_item_categories(mapping)
+
+
+def list_receipt_line_category_rows(rows: list[dict] | None = None) -> list[dict]:
+    """Unique Belegzeilen with optional category and occurrence count.
+
+    Includes descriptions that only exist in the saved mapping (orphaned
+    assignments) so they can still be edited. Quantity-display lines are
+    skipped. Sorted by description (case-insensitive).
+    """
+    mapping = load_receipt_item_categories()
+    counts: dict[str, int] = {}
+    for row in rows if rows is not None else get_last_rows():
+        if row.get("status") != "Extracted":
+            continue
+        result = row.get("result") or {}
+        for item in result.get("items") or []:
+            description = item.get("description")
+            if not isinstance(description, str) or not description.strip():
+                continue
+            description = description.strip()
+            if is_quantity_display_line(description):
+                continue
+            counts[description] = counts.get(description, 0) + 1
+
+    all_descriptions = set(counts) | set(mapping)
+    out: list[dict] = []
+    for description in sorted(all_descriptions, key=str.casefold):
+        out.append(
+            {
+                "description": description,
+                "category": mapping.get(description, ""),
+                "count": counts.get(description, 0),
+            }
+        )
+    return out
