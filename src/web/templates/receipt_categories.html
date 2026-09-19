@@ -8,45 +8,47 @@
   <div class="card">
     <h2>Belegzeilen ({{ lines|length }})</h2>
     {% if lines %}
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Beschreibung</th>
-            <th class="num">Vorkommen</th>
-            <th>Kategorie</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for line in lines %}
-          <tr>
-            <td>{{ line.description }}</td>
-            <td class="num">{% if line.count %}{{ line.count }}{% else %}—{% endif %}</td>
-            <td colspan="2">
-              <form action="/receipts/categories/assign" method="post" class="row" style="margin:0;">
+    <form action="/receipts/categories/save" method="post">
+      <div class="row" style="margin-bottom:0.75rem;">
+        <div class="field">
+          <button type="submit">Speichern</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Beschreibung</th>
+              <th class="num">Vorkommen</th>
+              <th>Kategorie</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for line in lines %}
+            <tr>
+              <td>{{ line.description }}</td>
+              <td class="num">{% if line.count %}{{ line.count }}{% else %}—{% endif %}</td>
+              <td>
                 <input type="hidden" name="description" value="{{ line.description }}">
-                <div class="field grow" style="flex:1; min-width:10rem;">
-                  <label class="label-spacer" for="cat-{{ loop.index }}">&nbsp;</label>
-                  <input id="cat-{{ loop.index }}" type="text" name="category" list="receipt-category-suggestions"
-                         value="{{ line.category }}" placeholder="Kategorie (leer = Zuordnung löschen)" style="width:100%;">
-                </div>
-                <div class="field">
-                  <label class="label-spacer" for="save-{{ loop.index }}">&nbsp;</label>
-                  <button id="save-{{ loop.index }}" type="submit">Speichern</button>
-                </div>
-              </form>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    <datalist id="receipt-category-suggestions">
-      {% for cat in category_suggestions %}
-      <option value="{{ cat }}"></option>
-      {% endfor %}
-    </datalist>
+                <input id="cat-{{ loop.index }}" type="text" name="category" list="receipt-category-suggestions"
+                       value="{{ line.category }}" placeholder="Kategorie (leer = Zuordnung löschen)" style="width:100%; min-width:10rem;">
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <datalist id="receipt-category-suggestions">
+        {% for cat in category_suggestions %}
+        <option value="{{ cat }}"></option>
+        {% endfor %}
+      </datalist>
+      <div class="row" style="margin-top:0.75rem;">
+        <div class="field">
+          <button type="submit">Speichern</button>
+        </div>
+      </div>
+    </form>
     {% else %}
     <p class="muted">Noch keine Belegzeilen. Bitte zuerst Belege scannen oder hochladen, oder eine Kategorie-Zuordnung speichern.</p>
     {% endif %}

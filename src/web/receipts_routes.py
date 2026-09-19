@@ -317,22 +317,30 @@ def register_receipts_routes(app: FastAPI, templates: Jinja2Templates) -> None:
             },
         )
 
-    @app.post("/receipts/categories/assign")
-    async def receipts_categories_assign(
+    @app.post("/receipts/categories/save")
+    async def receipts_categories_save(
         _: AuthDep,
-        description: str = Form(""),
-        category: str = Form(""),
+        description: list[str] = Form(default=[]),
+        category: list[str] = Form(default=[]),
     ):
-        description = (description or "").strip()
-        category = (category or "").strip()
-        if not description:
+        """Save category assignments for all Belegzeilen rows in one submit."""
+        if isinstance(description, str):
+            description = [description]
+        if isinstance(category, str):
+            category = [category]
+        if len(category) < len(description):
+            category = list(category) + [""] * (len(description) - len(category))
+        updated = 0
+        for desc, cat in zip(description, category):
+            desc = (desc or "").strip()
+            if not desc:
+                continue
+            set_receipt_item_category(desc, (cat or "").strip())
+            updated += 1
+        if updated == 0:
             return RedirectResponse(
-                f"/receipts/categories?error={quote('Beschreibung fehlt.')}",
+                f"/receipts/categories?error={quote('Keine Zeilen zum Speichern.')}",
                 status_code=303,
             )
-        set_receipt_item_category(description, category)
-        if category:
-            msg = quote(f"Kategorie „{category}“ für „{description}“ gespeichert.")
-        else:
-            msg = quote(f"Zuordnung für „{description}“ gelöscht.")
+        msg = quote(f"{updated} Zuordnung(en) gespeichert.")
         return RedirectResponse(f"/receipts/categories?message={msg}", status_code=303)
