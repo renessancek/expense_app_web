@@ -418,18 +418,23 @@ def set_receipt_item_category(description: str, category: str) -> None:
 
 
 def list_receipt_line_category_rows(rows: list[dict] | None = None) -> list[dict]:
-    """Unique Belegzeilen with optional category and occurrence count.
+    """Unique Belegzeilen with optional category, count, and source receipt.
 
     Includes descriptions that only exist in the saved mapping (orphaned
     assignments) so they can still be edited. Quantity-display lines are
-    skipped. Sorted by description (case-insensitive).
+    skipped. Sorted by description (case-insensitive). ``path`` / ``file``
+    come from the first Extracted receipt that contained the line (for a
+    detail-page link).
     """
     mapping = load_receipt_item_categories()
     counts: dict[str, int] = {}
+    sources: dict[str, tuple[str | None, str | None]] = {}
     for row in rows if rows is not None else get_last_rows():
         if row.get("status") != "Extracted":
             continue
         result = row.get("result") or {}
+        receipt_path = row.get("path") if isinstance(row.get("path"), str) else None
+        receipt_file = row.get("file") if isinstance(row.get("file"), str) else None
         for item in result.get("items") or []:
             description = item.get("description")
             if not isinstance(description, str) or not description.strip():
@@ -438,15 +443,20 @@ def list_receipt_line_category_rows(rows: list[dict] | None = None) -> list[dict
             if is_quantity_display_line(description):
                 continue
             counts[description] = counts.get(description, 0) + 1
+            if description not in sources:
+                sources[description] = (receipt_path, receipt_file)
 
     all_descriptions = set(counts) | set(mapping)
     out: list[dict] = []
     for description in sorted(all_descriptions, key=str.casefold):
+        path, file_name = sources.get(description, (None, None))
         out.append(
             {
                 "description": description,
                 "category": mapping.get(description, ""),
                 "count": counts.get(description, 0),
+                "path": path,
+                "file": file_name,
             }
         )
     return out

@@ -439,6 +439,8 @@ class ReceiptItemCategoryTests(unittest.TestCase):
                 rows = [
                     {
                         "status": "Extracted",
+                        "path": "/data/Rechnungen/markt.pdf",
+                        "file": "markt.pdf",
                         "result": {
                             "items": [
                                 {"description": "Banane", "amount": 1.0},
@@ -456,8 +458,12 @@ class ReceiptItemCategoryTests(unittest.TestCase):
                 self.assertNotIn("2 x 2.19", by_desc)
                 self.assertEqual(by_desc["Banane"]["category"], "Obst")
                 self.assertEqual(by_desc["Banane"]["count"], 1)
+                self.assertEqual(by_desc["Banane"]["path"], "/data/Rechnungen/markt.pdf")
+                self.assertEqual(by_desc["Banane"]["file"], "markt.pdf")
                 self.assertEqual(by_desc["Bananen"]["category"], "")
+                self.assertEqual(by_desc["Bananen"]["path"], "/data/Rechnungen/markt.pdf")
                 self.assertEqual(by_desc["Bio-Banane"]["count"], 0)
+                self.assertIsNone(by_desc["Bio-Banane"]["path"])
                 set_receipt_item_category("Banane", "")
                 self.assertNotIn("Banane", load_receipt_item_categories())
 

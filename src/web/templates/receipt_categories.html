@@ -21,6 +21,7 @@
               <th>Beschreibung</th>
               <th class="num">Vorkommen</th>
               <th>Kategorie</th>
+              <th>Beleg</th>
             </tr>
           </thead>
           <tbody>
@@ -33,6 +34,7 @@
                 <input id="cat-{{ loop.index }}" type="text" name="category" list="receipt-category-suggestions"
                        value="{{ line.category }}" placeholder="Kategorie (leer = Zuordnung löschen)" style="width:100%; min-width:10rem;">
               </td>
+              <td>{% if line.path %}<a href="/receipts/detail?path={{ line.path|urlencode }}">{% if line.file %}{{ line.file }}{% else %}Details{% endif %}</a>{% else %}—{% endif %}</td>
             </tr>
             {% endfor %}
           </tbody>
