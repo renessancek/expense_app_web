@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import mimetypes
 from pathlib import Path
 from urllib.parse import quote
 
 from fastapi import FastAPI, File, Form, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from receipt_extractor import (
@@ -214,6 +215,24 @@ def register_receipts_routes(app: FastAPI, templates: Jinja2Templates) -> None:
             msg += f", {failed} mit Fehler"
         msg += "."
         return RedirectResponse(f"/receipts?message={quote(msg)}", status_code=303)
+
+
+    @app.get("/receipts/file")
+    async def receipts_file(_: AuthDep, path: str = ""):
+        """Serve the original Beleg file if it stays under the receipts root."""
+        resolved = resolve_under_receipts(path)
+        if resolved is None or not resolved.is_file():
+            return RedirectResponse(
+                f"/receipts?error={quote('Originaldatei nicht gefunden.')}",
+                status_code=303,
+            )
+        media_type, _ = mimetypes.guess_type(str(resolved))
+        return FileResponse(
+            path=resolved,
+            filename=resolved.name,
+            media_type=media_type or "application/octet-stream",
+            content_disposition_type="inline",
+        )
 
     @app.get("/receipts/detail", response_class=HTMLResponse)
     async def receipts_detail(

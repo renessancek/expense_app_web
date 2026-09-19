@@ -11,7 +11,11 @@
     {% if row.error %}
     <p class="flash err">{{ row.error }}</p>
     {% endif %}
-    <p class="muted"><code>{{ path }}</code></p>
+    <p class="muted">Originaldatei:
+      {% if path %}
+      <a href="/receipts/file?path={{ path|urlencode }}" target="_blank" rel="noopener"><code>{{ path }}</code></a>
+      {% else %}—{% endif %}
+    </p>
     <form action="/receipts/delete" method="post"
           onsubmit="return confirm('Beleg „{{ file_name }}“ wirklich löschen?');">
       <input type="hidden" name="path" value="{{ path }}">
