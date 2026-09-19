@@ -227,11 +227,21 @@ def register_receipts_routes(app: FastAPI, templates: Jinja2Templates) -> None:
                 status_code=303,
             )
         media_type, _ = mimetypes.guess_type(str(resolved))
+        if not media_type:
+            media_type = {
+                ".pdf": "application/pdf",
+                ".png": "image/png",
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".webp": "image/webp",
+                ".bmp": "image/bmp",
+                ".gif": "image/gif",
+            }.get(resolved.suffix.lower(), "application/octet-stream")
+        # No filename= so browsers get no attachment disposition and can
+        # render PDF/images in the tab opened by target="_blank".
         return FileResponse(
             path=resolved,
-            filename=resolved.name,
-            media_type=media_type or "application/octet-stream",
-            content_disposition_type="inline",
+            media_type=media_type,
         )
 
     @app.get("/receipts/detail", response_class=HTMLResponse)
