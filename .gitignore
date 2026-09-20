@@ -16,6 +16,7 @@ dist/
 # Project specific sensitive data
 backups/
 .data/
+data/
 
 # Editor
 .vscode/
