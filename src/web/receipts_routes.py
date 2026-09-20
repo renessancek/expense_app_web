@@ -14,9 +14,10 @@ from receipt_extractor import (
     RECEIPT_SUFFIXES,
     ReceiptExtractError,
     extract_receipt,
-    extract_receipt_folder,
+    list_receipt_files,
     receipt_import_row,
 )
+from web import receipts_db
 from web.deps import AuthDep, StoreDep
 from web.receipts_state import (
     aggregate_receipt_items,
@@ -35,27 +36,72 @@ from web.receipts_state import (
     receipts_uploads_dir,
     resolve_under_receipts,
     safe_upload_filename,
-    set_last_rows,
     set_receipt_item_category,
 )
 
 
-def _extract_receipts_folders(categorizer=None):
-    """Run folder extract on receipts root and uploads; merge rows."""
+def _upsert_extracted(path: Path, categorizer=None) -> dict:
+    """OCR one file and upsert into SQLite; return the import row dict used."""
+    try:
+        result = extract_receipt(path, categorizer=categorizer)
+        row = receipt_import_row(path, result=result)
+    except ReceiptExtractError as err:
+        row = receipt_import_row(path, error=err)
+    except Exception as err:
+        row = receipt_import_row(
+            path, error=f"Could not extract the receipt: {err}"
+        )
+    file_hash = receipts_db.hash_file(path)
+    receipts_db.upsert_row_from_import_dict(
+        row, file_hash=file_hash, preserve_date_override=True
+    )
+    return row
+
+
+def _scan_receipts_folders(categorizer=None) -> tuple[list[dict], int, int]:
+    """Scan receipts + uploads; hash-skip unchanged files; upsert new/changed.
+
+    Returns (rows_for_this_scan, extracted_or_reused_ok, failed).
+    Does not wipe DB rows for files not listed in this run.
+    """
     ensure_receipts_dirs()
-    rows = []
-    seen = set()
+    rows: list[dict] = []
+    seen: set[str] = set()
+    ok = 0
+    failed = 0
     for folder in (receipts_dir(), receipts_uploads_dir()):
         try:
-            folder_rows = extract_receipt_folder(folder, categorizer=categorizer)
+            files = list_receipt_files(folder)
         except ReceiptExtractError:
             continue
-        for row in folder_rows:
-            key = row.get("path")
-            if key and key not in seen:
-                seen.add(key)
-                rows.append(row)
-    return rows
+        for path in files:
+            key = str(path.resolve())
+            if key in seen:
+                continue
+            seen.add(key)
+            current_hash = receipts_db.hash_file(path)
+            existing = receipts_db.get_row_by_path(path)
+            if (
+                existing is not None
+                and existing.get("file_hash")
+                and existing.get("file_hash") == current_hash
+                and existing.get("status") == "Extracted"
+            ):
+                # Unchanged file — skip OCR, keep persisted row.
+                rows.append(existing)
+                ok += 1
+                continue
+            row = _upsert_extracted(path, categorizer=categorizer)
+            # Re-read so effective date / override are present.
+            stored = receipts_db.get_row_by_path(path) or row
+            rows.append(stored)
+            if stored.get("status") == "Extracted":
+                ok += 1
+            else:
+                failed += 1
+    # Drop DB entries whose files vanished from disk.
+    prune_missing_receipt_rows()
+    return rows, ok, failed
 
 
 def register_receipts_routes(app: FastAPI, templates: Jinja2Templates) -> None:
@@ -122,24 +168,8 @@ def register_receipts_routes(app: FastAPI, templates: Jinja2Templates) -> None:
             target.write_bytes(content)
             claimed_names.add(base)
             saved += 1
-            try:
-                result = extract_receipt(target, categorizer=store.categorizer)
-                rows.append(receipt_import_row(target, result=result))
-            except ReceiptExtractError as err:
-                rows.append(receipt_import_row(target, error=err))
-            except Exception as err:
-                rows.append(
-                    receipt_import_row(
-                        target, error=f"Could not extract the receipt: {err}"
-                    )
-                )
-        if rows:
-            previous = {
-                r.get("path"): r for r in get_last_rows() if r.get("path")
-            }
-            for row in rows:
-                previous[row.get("path")] = row
-            set_last_rows(list(previous.values()))
+            row = _upsert_extracted(target, categorizer=store.categorizer)
+            rows.append(row)
 
         dup_msg = ""
         if duplicates:
@@ -200,22 +230,17 @@ def register_receipts_routes(app: FastAPI, templates: Jinja2Templates) -> None:
 
     @app.post("/receipts/scan")
     async def receipts_scan(_: AuthDep, store: StoreDep):
-        ensure_receipts_dirs()
-        rows = _extract_receipts_folders(categorizer=store.categorizer)
-        set_last_rows(rows)
+        rows, ok, failed = _scan_receipts_folders(categorizer=store.categorizer)
         if not rows:
             return RedirectResponse(
                 f"/receipts?message={quote('Ordner gescannt. Keine Belege gefunden.')}",
                 status_code=303,
             )
-        ok = sum(1 for r in rows if r.get("status") == "Extracted")
-        failed = len(rows) - ok
         msg = f"Ordner gescannt. {ok} extrahiert"
         if failed:
             msg += f", {failed} mit Fehler"
         msg += "."
         return RedirectResponse(f"/receipts?message={quote(msg)}", status_code=303)
-
 
     @app.get("/receipts/file")
     async def receipts_file(_: AuthDep, path: str = ""):
@@ -250,6 +275,8 @@ def register_receipts_routes(app: FastAPI, templates: Jinja2Templates) -> None:
         _: AuthDep,
         store: StoreDep,
         path: str = "",
+        message: str = "",
+        error: str = "",
     ):
         resolved = resolve_under_receipts(path)
         if resolved is None:
@@ -259,15 +286,8 @@ def register_receipts_routes(app: FastAPI, templates: Jinja2Templates) -> None:
             )
         row = find_row_by_path(resolved)
         if row is None and resolved.is_file():
-            try:
-                result = extract_receipt(resolved, categorizer=store.categorizer)
-                row = receipt_import_row(resolved, result=result)
-            except ReceiptExtractError as err:
-                row = receipt_import_row(resolved, error=err)
-            except Exception as err:
-                row = receipt_import_row(
-                    resolved, error=f"Could not extract the receipt: {err}"
-                )
+            row = _upsert_extracted(resolved, categorizer=store.categorizer)
+            row = find_row_by_path(resolved) or row
         if row is None:
             return RedirectResponse(
                 f"/receipts?error={quote('Beleg nicht gefunden. Bitte zuerst scannen oder hochladen.')}",
@@ -285,7 +305,55 @@ def register_receipts_routes(app: FastAPI, templates: Jinja2Templates) -> None:
                 "items": result.get("items") or [],
                 "file_name": row.get("file") or resolved.name,
                 "path": str(resolved),
+                "date_extracted": row.get("date_extracted")
+                or result.get("date_extracted")
+                or "",
+                "date_override": row.get("date_override")
+                or result.get("date_override")
+                or "",
+                "effective_date": row.get("date") or result.get("date") or "",
+                "message": message,
+                "error": error,
             },
+        )
+
+    @app.post("/receipts/detail/date")
+    async def receipts_detail_date(
+        _: AuthDep,
+        path: str = Form(""),
+        date_override: str = Form(""),
+        clear: str = Form(""),
+    ):
+        """Set or clear a permanent date_override (OCR date_extracted kept)."""
+        resolved = resolve_under_receipts(path)
+        if resolved is None:
+            return RedirectResponse(
+                f"/receipts?error={quote('Ungültiger Dateipfad.')}",
+                status_code=303,
+            )
+        if clear:
+            ok = receipts_db.set_date_override(resolved, None)
+            msg = "Datumskorrektur entfernt."
+        else:
+            value = (date_override or "").strip()
+            if value and not (
+                len(value) == 10 and value[4] == "-" and value[7] == "-"
+            ):
+                return RedirectResponse(
+                    f"/receipts/detail?path={quote(str(resolved))}"
+                    f"&error={quote('Datum bitte als JJJJ-MM-TT eingeben.')}",
+                    status_code=303,
+                )
+            ok = receipts_db.set_date_override(resolved, value or None)
+            msg = "Datumskorrektur gespeichert." if value else "Datumskorrektur entfernt."
+        if not ok:
+            return RedirectResponse(
+                f"/receipts?error={quote('Beleg nicht in der Datenbank gefunden.')}",
+                status_code=303,
+            )
+        return RedirectResponse(
+            f"/receipts/detail?path={quote(str(resolved))}&message={quote(msg)}",
+            status_code=303,
         )
 
     @app.get("/receipts/categories", response_class=HTMLResponse)

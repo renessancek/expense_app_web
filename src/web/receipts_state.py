@@ -1,26 +1,18 @@
-"""In-memory last-run Belege extraction state and path helpers."""
+"""Belege extraction state backed by SQLite, plus path helpers."""
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from threading import Lock
 
-from app_paths import expense_data_dir, user_data_dir
 from receipt_extractor import is_quantity_display_line
-
-_lock = Lock()
-_last_rows: list[dict] = []
+from web import receipts_db
 
 NO_DATE_MONTH = "ohne Datum"
 
 
 def data_root_for_receipts() -> Path:
     """Resolve writable root (EXPENSE_DATA_DIR or user data dir)."""
-    override = expense_data_dir()
-    if override is not None:
-        return override
-    return user_data_dir()
+    return receipts_db.data_root()
 
 
 def receipts_dir() -> Path:
@@ -34,22 +26,31 @@ def receipts_uploads_dir() -> Path:
 
 
 def ensure_receipts_dirs() -> Path:
-    """Create receipts and uploads directories; return the receipts root."""
+    """Create receipts and uploads directories; init DB schema; return receipts root."""
     root = receipts_dir()
     root.mkdir(parents=True, exist_ok=True)
     receipts_uploads_dir().mkdir(parents=True, exist_ok=True)
+    # First access: create schema and one-time JSON category import.
+    conn = receipts_db.ensure_db()
+    conn.close()
     return root
 
 
 def _row_date(row: dict) -> str:
-    """Best available ISO date string for a receipt row."""
+    """Best available ISO date string for a receipt row (override or extracted)."""
     date = row.get("date")
     if isinstance(date, str) and date.strip():
         return date.strip()
+    override = row.get("date_override")
+    if isinstance(override, str) and override.strip():
+        return override.strip()
     result = row.get("result") or {}
     date = result.get("date")
     if isinstance(date, str) and date.strip():
         return date.strip()
+    extracted = row.get("date_extracted") or result.get("date_extracted")
+    if isinstance(extracted, str) and extracted.strip():
+        return extracted.strip()
     return ""
 
 
@@ -60,41 +61,26 @@ def sort_receipt_rows_by_date_desc(rows: list[dict] | None) -> list[dict]:
 
 
 def set_last_rows(rows: list[dict]) -> None:
-    """Replace the process-wide last extraction result list (date desc)."""
-    global _last_rows
-    with _lock:
-        _last_rows = sort_receipt_rows_by_date_desc(list(rows or []))
+    """Upsert each import row into SQLite (merge by path; does not wipe others)."""
+    for row in rows or []:
+        if not isinstance(row, dict) or not row.get("path"):
+            continue
+        receipts_db.upsert_row_from_import_dict(row)
 
 
 def get_last_rows() -> list[dict]:
-    """Return a copy of the last extraction rows."""
-    with _lock:
-        return list(_last_rows)
+    """Return all persisted extraction rows (effective date desc)."""
+    return receipts_db.list_rows()
 
 
 def clear_last_rows() -> None:
-    """Drop cached rows (tests)."""
-    set_last_rows([])
+    """Drop all cached receipt rows (tests). Categories are kept."""
+    receipts_db.clear_all_receipts()
 
 
 def find_row_by_path(path: str | Path) -> dict | None:
     """Find a cached import row whose path resolves equal to ``path``."""
-    try:
-        target = Path(path).resolve()
-    except (OSError, RuntimeError, ValueError):
-        return None
-    with _lock:
-        for row in _last_rows:
-            raw = row.get("path")
-            if not raw:
-                continue
-            try:
-                if Path(raw).resolve() == target:
-                    return dict(row)
-            except (OSError, RuntimeError, ValueError):
-                if str(raw) == str(path):
-                    return dict(row)
-    return None
+    return receipts_db.get_row_by_path(path)
 
 
 def remove_last_row_by_path(path: str | Path) -> bool:
@@ -103,29 +89,7 @@ def remove_last_row_by_path(path: str | Path) -> bool:
     Returns True if a row was removed. Line items live only inside the row's
     ``result``; removing the row is the cascade delete for Positionen.
     """
-    try:
-        target = Path(path).resolve()
-    except (OSError, RuntimeError, ValueError):
-        return False
-    removed = False
-    with _lock:
-        kept: list[dict] = []
-        for row in _last_rows:
-            raw = row.get("path")
-            if not raw:
-                kept.append(row)
-                continue
-            try:
-                same = Path(raw).resolve() == target
-            except (OSError, RuntimeError, ValueError):
-                same = str(raw) == str(path)
-            if same:
-                removed = True
-                continue
-            kept.append(row)
-        if removed:
-            _last_rows[:] = kept
-    return removed
+    return receipts_db.delete_row_by_path(path)
 
 
 def prune_missing_receipt_rows() -> int:
@@ -134,24 +98,7 @@ def prune_missing_receipt_rows() -> int:
     Prevents orphaned Positionen in "Positionen summiert" after a delete or
     after files were removed outside the app. Returns how many rows were dropped.
     """
-    removed = 0
-    with _lock:
-        kept: list[dict] = []
-        for row in _last_rows:
-            raw = row.get("path")
-            if not raw:
-                kept.append(row)
-                continue
-            try:
-                if Path(raw).is_file():
-                    kept.append(row)
-                else:
-                    removed += 1
-            except OSError:
-                removed += 1
-        if removed:
-            _last_rows[:] = kept
-    return removed
+    return receipts_db.prune_missing()
 
 
 def delete_receipt_from_cache(path: str | Path) -> bool:
@@ -367,63 +314,27 @@ def aggregate_receipt_items(rows: list[dict] | None) -> list[dict]:
     return groups
 
 
-RECEIPT_ITEM_CATEGORIES_FILENAME = "receipt_item_categories.json"
+RECEIPT_ITEM_CATEGORIES_FILENAME = receipts_db.RECEIPT_ITEM_CATEGORIES_JSON
 
 
 def receipt_item_categories_path() -> Path:
-    """JSON map of exact Belegzeile description → category name."""
-    return data_root_for_receipts() / RECEIPT_ITEM_CATEGORIES_FILENAME
+    """Legacy JSON path (backup after DB migration)."""
+    return receipts_db.categories_json_path()
 
 
 def load_receipt_item_categories() -> dict[str, str]:
-    """Return description→category assignments (empty dict if missing/invalid)."""
-    path = receipt_item_categories_path()
-    if not path.is_file():
-        return {}
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-        return {}
-    if not isinstance(raw, dict):
-        return {}
-    out: dict[str, str] = {}
-    for key, value in raw.items():
-        if not isinstance(key, str) or not key.strip():
-            continue
-        if not isinstance(value, str) or not value.strip():
-            continue
-        out[key.strip()] = value.strip()
-    return out
+    """Return description→category assignments from SQLite."""
+    return receipts_db.load_categories()
 
 
 def save_receipt_item_categories(mapping: dict[str, str]) -> None:
-    """Persist description→category map (sorted keys for stable diffs)."""
-    clean: dict[str, str] = {}
-    for key, value in (mapping or {}).items():
-        if not isinstance(key, str) or not key.strip():
-            continue
-        if not isinstance(value, str) or not value.strip():
-            continue
-        clean[key.strip()] = value.strip()
-    path = receipt_item_categories_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    ordered = {k: clean[k] for k in sorted(clean.keys(), key=str.casefold)}
-    payload = json.dumps(ordered, ensure_ascii=False, indent=2) + chr(10)
-    path.write_text(payload, encoding="utf-8")
+    """Persist description→category map into SQLite."""
+    receipts_db.save_categories(mapping)
 
 
 def set_receipt_item_category(description: str, category: str) -> None:
     """Assign ``category`` to ``description``, or clear when category is empty."""
-    description = (description or "").strip()
-    category = (category or "").strip()
-    if not description:
-        return
-    mapping = load_receipt_item_categories()
-    if not category:
-        mapping.pop(description, None)
-    else:
-        mapping[description] = category
-    save_receipt_item_categories(mapping)
+    receipts_db.set_category(description, category)
 
 
 def list_receipt_line_category_rows(rows: list[dict] | None = None) -> list[dict]:

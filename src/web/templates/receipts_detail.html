@@ -3,6 +3,9 @@
   <h1>Beleg: {{ file_name }}</h1>
   <p><a href="/receipts">&larr; Zurück zu Belege</a></p>
 
+  {% if message %}<div class="flash ok">{{ message }}</div>{% endif %}
+  {% if error %}<div class="flash err">{{ error }}</div>{% endif %}
+
   <div class="card">
     <h2>Status</h2>
     <p class="{% if row.status == 'Extracted' %}status-ok{% else %}status-bad{% endif %}">
@@ -28,7 +31,8 @@
     <table>
       <tbody>
         <tr><th>Händler</th><td>{{ result.merchant or "—" }}</td></tr>
-        <tr><th>Datum</th><td>{{ result.date|date_de or "—" }}</td></tr>
+        <tr><th>Datum</th><td>{{ effective_date|date_de or "—" }}</td></tr>
+        <tr><th>OCR-Datum</th><td class="muted">{{ date_extracted|date_de or "—" }}</td></tr>
         <tr><th>Summe</th><td>{% if result.total is not none %}{{ result.total|total_de }}{% else %}—{% endif %}</td></tr>
         <tr><th>Zwischensumme</th><td>{% if result.subtotal is not none %}{{ result.subtotal|total_de }}{% else %}—{% endif %}</td></tr>
         <tr><th>MwSt</th><td>{% if result.tax is not none %}{{ result.tax|total_de }}{% else %}—{% endif %}</td></tr>
@@ -36,6 +40,27 @@
         <tr><th>Hinweise</th><td class="muted">{{ result.notes or row.error or "—" }}</td></tr>
       </tbody>
     </table>
+  </div>
+
+  <div class="card">
+    <h2>Datumskorrektur</h2>
+    <p class="muted">Permanente Korrektur des Belegdatums. Das OCR-Datum bleibt erhalten und wird bei erneutem Scannen nicht überschrieben.</p>
+    <form action="/receipts/detail/date" method="post" class="row">
+      <input type="hidden" name="path" value="{{ path }}">
+      <div class="field">
+        <label for="date_override">Korrigiertes Datum (JJJJ-MM-TT)</label>
+        <input id="date_override" type="date" name="date_override"
+               value="{{ date_override or '' }}">
+      </div>
+      <div class="field">
+        <label class="label-spacer" for="date-override-submit">&nbsp;</label>
+        <button id="date-override-submit" type="submit">Datum speichern</button>
+      </div>
+      <div class="field">
+        <label class="label-spacer" for="date-override-clear">&nbsp;</label>
+        <button id="date-override-clear" type="submit" name="clear" value="1" class="secondary">Korrektur entfernen</button>
+      </div>
+    </form>
   </div>
 
   <div class="card">

@@ -19,6 +19,7 @@ from receipt_extractor import (  # noqa: E402
     is_quantity_display_line,
     parse_receipt_text,
 )
+from web import receipts_db  # noqa: E402
 from web.receipts_state import (  # noqa: E402
     aggregate_receipt_items,
     clear_last_rows,
@@ -111,115 +112,154 @@ class ReceiptsStateHelpersTests(unittest.TestCase):
                 self.assertFalse(receipt_name_taken("missing.pdf"))
 
     def test_last_rows_cache(self):
-        clear_last_rows()
-        set_last_rows([{"path": "/x", "file": "x.pdf", "status": "Extracted"}])
-        self.assertEqual(len(get_last_rows()), 1)
-        clear_last_rows()
-        self.assertEqual(get_last_rows(), [])
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.dict(os.environ, {"EXPENSE_DATA_DIR": tmp}):
+                receipts_db.reset_schema_flag()
+                ensure_receipts_dirs()
+                clear_last_rows()
+                set_last_rows([{"path": "/x", "file": "x.pdf", "status": "Extracted"}])
+                self.assertEqual(len(get_last_rows()), 1)
+                clear_last_rows()
+                self.assertEqual(get_last_rows(), [])
 
     def test_remove_last_row_by_path(self):
         with tempfile.TemporaryDirectory() as tmp:
-            keep = Path(tmp) / "keep.pdf"
-            drop = Path(tmp) / "drop.pdf"
-            keep.write_bytes(b"1")
-            drop.write_bytes(b"2")
-            clear_last_rows()
-            set_last_rows(
-                [
-                    {"path": str(keep.resolve()), "file": "keep.pdf"},
-                    {"path": str(drop.resolve()), "file": "drop.pdf"},
-                ]
-            )
-            self.assertTrue(remove_last_row_by_path(drop))
-            files = [r["file"] for r in get_last_rows()]
-            self.assertEqual(files, ["keep.pdf"])
-            self.assertFalse(remove_last_row_by_path(drop))
-            clear_last_rows()
+            with mock.patch.dict(os.environ, {"EXPENSE_DATA_DIR": tmp}):
+                receipts_db.reset_schema_flag()
+                ensure_receipts_dirs()
+                keep = Path(tmp) / "receipts" / "keep.pdf"
+                drop = Path(tmp) / "receipts" / "drop.pdf"
+                keep.write_bytes(b"1")
+                drop.write_bytes(b"2")
+                clear_last_rows()
+                set_last_rows(
+                    [
+                        {"path": str(keep.resolve()), "file": "keep.pdf"},
+                        {"path": str(drop.resolve()), "file": "drop.pdf"},
+                    ]
+                )
+                self.assertTrue(remove_last_row_by_path(drop))
+                files = [r["file"] for r in get_last_rows()]
+                self.assertEqual(files, ["keep.pdf"])
+                self.assertFalse(remove_last_row_by_path(drop))
+                clear_last_rows()
 
     def test_delete_receipt_cascades_positionen_out_of_totals(self):
         with tempfile.TemporaryDirectory() as tmp:
-            keep = Path(tmp) / "keep.pdf"
-            drop = Path(tmp) / "drop.pdf"
-            keep.write_bytes(b"1")
-            drop.write_bytes(b"2")
-            clear_last_rows()
-            set_last_rows(
-                [
-                    {
-                        "path": str(keep.resolve()),
-                        "file": "keep.pdf",
-                        "status": "Extracted",
-                        "date": "2024-01-10",
-                        "result": {
+            with mock.patch.dict(os.environ, {"EXPENSE_DATA_DIR": tmp}):
+                receipts_db.reset_schema_flag()
+                ensure_receipts_dirs()
+                keep = Path(tmp) / "receipts" / "keep.pdf"
+                drop = Path(tmp) / "receipts" / "drop.pdf"
+                keep.write_bytes(b"1")
+                drop.write_bytes(b"2")
+                clear_last_rows()
+                set_last_rows(
+                    [
+                        {
+                            "path": str(keep.resolve()),
+                            "file": "keep.pdf",
+                            "status": "Extracted",
                             "date": "2024-01-10",
-                            "items": [
-                                {"description": "Milch", "amount": 1.29},
-                            ],
+                            "result": {
+                                "date": "2024-01-10",
+                                "items": [
+                                    {"description": "Milch", "amount": 1.29},
+                                ],
+                            },
                         },
-                    },
-                    {
-                        "path": str(drop.resolve()),
-                        "file": "drop.pdf",
-                        "status": "Extracted",
-                        "date": "2024-01-11",
-                        "result": {
+                        {
+                            "path": str(drop.resolve()),
+                            "file": "drop.pdf",
+                            "status": "Extracted",
                             "date": "2024-01-11",
-                            "items": [
-                                {"description": "Alpromil", "amount": 3.99},
-                                {"description": "Milch", "amount": 1.29},
-                            ],
+                            "result": {
+                                "date": "2024-01-11",
+                                "items": [
+                                    {"description": "Alpromil", "amount": 3.99},
+                                    {"description": "Milch", "amount": 1.29},
+                                ],
+                            },
                         },
-                    },
-                ]
-            )
-            before = aggregate_receipt_items(get_last_rows())
-            jan = before[0]
-            by_desc = {r["description"]: r["amount"] for r in jan["rows"]}
-            self.assertAlmostEqual(by_desc["Alpromil"], 3.99)
-            self.assertAlmostEqual(by_desc["Milch"], 2.58)
+                    ]
+                )
+                before = aggregate_receipt_items(get_last_rows())
+                jan = before[0]
+                by_desc = {r["description"]: r["amount"] for r in jan["rows"]}
+                self.assertAlmostEqual(by_desc["Alpromil"], 3.99)
+                self.assertAlmostEqual(by_desc["Milch"], 2.58)
 
-            drop.unlink()
-            self.assertTrue(delete_receipt_from_cache(drop))
+                drop.unlink()
+                self.assertTrue(delete_receipt_from_cache(drop))
 
-            after = aggregate_receipt_items(get_last_rows())
-            self.assertEqual(len(after), 1)
-            only = {r["description"]: r["amount"] for r in after[0]["rows"]}
-            self.assertEqual(list(only), ["Milch"])
-            self.assertAlmostEqual(only["Milch"], 1.29)
-            self.assertNotIn("Alpromil", only)
-            clear_last_rows()
+                after = aggregate_receipt_items(get_last_rows())
+                self.assertEqual(len(after), 1)
+                only = {r["description"]: r["amount"] for r in after[0]["rows"]}
+                self.assertEqual(list(only), ["Milch"])
+                self.assertAlmostEqual(only["Milch"], 1.29)
+                self.assertNotIn("Alpromil", only)
+                clear_last_rows()
 
     def test_prune_missing_receipt_rows(self):
         with tempfile.TemporaryDirectory() as tmp:
-            keep = Path(tmp) / "keep.pdf"
-            gone = Path(tmp) / "gone.pdf"
-            keep.write_bytes(b"1")
-            gone.write_bytes(b"2")
-            clear_last_rows()
-            set_last_rows(
-                [
-                    {"path": str(keep.resolve()), "file": "keep.pdf"},
-                    {"path": str(gone.resolve()), "file": "gone.pdf"},
-                ]
-            )
-            gone.unlink()
-            self.assertEqual(prune_missing_receipt_rows(), 1)
-            self.assertEqual([r["file"] for r in get_last_rows()], ["keep.pdf"])
-            clear_last_rows()
+            with mock.patch.dict(os.environ, {"EXPENSE_DATA_DIR": tmp}):
+                receipts_db.reset_schema_flag()
+                ensure_receipts_dirs()
+                keep = Path(tmp) / "receipts" / "keep.pdf"
+                gone = Path(tmp) / "receipts" / "gone.pdf"
+                keep.write_bytes(b"1")
+                gone.write_bytes(b"2")
+                clear_last_rows()
+                set_last_rows(
+                    [
+                        {"path": str(keep.resolve()), "file": "keep.pdf"},
+                        {"path": str(gone.resolve()), "file": "gone.pdf"},
+                    ]
+                )
+                gone.unlink()
+                self.assertEqual(prune_missing_receipt_rows(), 1)
+                self.assertEqual([r["file"] for r in get_last_rows()], ["keep.pdf"])
+                clear_last_rows()
 
     def test_last_rows_sorted_by_date_descending(self):
-        clear_last_rows()
-        set_last_rows(
-            [
-                {"file": "old.pdf", "date": "2024-01-10", "status": "Extracted"},
-                {"file": "new.pdf", "date": "2024-03-01", "status": "Extracted"},
-                {"file": "mid.pdf", "result": {"date": "2024-02-15"}, "status": "Extracted"},
-                {"file": "nodate.pdf", "date": None, "status": "Failed"},
-            ]
-        )
-        files = [r["file"] for r in get_last_rows()]
-        self.assertEqual(files, ["new.pdf", "mid.pdf", "old.pdf", "nodate.pdf"])
-        clear_last_rows()
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.dict(os.environ, {"EXPENSE_DATA_DIR": tmp}):
+                receipts_db.reset_schema_flag()
+                ensure_receipts_dirs()
+                clear_last_rows()
+                set_last_rows(
+                    [
+                        {
+                            "path": str(Path(tmp) / "receipts" / "old.pdf"),
+                            "file": "old.pdf",
+                            "date": "2024-01-10",
+                            "status": "Extracted",
+                            "result": {"date": "2024-01-10", "items": []},
+                        },
+                        {
+                            "path": str(Path(tmp) / "receipts" / "new.pdf"),
+                            "file": "new.pdf",
+                            "date": "2024-03-01",
+                            "status": "Extracted",
+                            "result": {"date": "2024-03-01", "items": []},
+                        },
+                        {
+                            "path": str(Path(tmp) / "receipts" / "mid.pdf"),
+                            "file": "mid.pdf",
+                            "result": {"date": "2024-02-15", "items": []},
+                            "status": "Extracted",
+                        },
+                        {
+                            "path": str(Path(tmp) / "receipts" / "nodate.pdf"),
+                            "file": "nodate.pdf",
+                            "date": None,
+                            "status": "Failed",
+                        },
+                    ]
+                )
+                files = [r["file"] for r in get_last_rows()]
+                self.assertEqual(files, ["new.pdf", "mid.pdf", "old.pdf", "nodate.pdf"])
+                clear_last_rows()
 
     def test_sort_receipt_rows_by_date_desc_helper(self):
         rows = [
