@@ -544,55 +544,81 @@ def _amazon_invoice_date(lines):
 
 
 def _amazon_gross_total(lines):
-    """Gross amount from Zahlbetrag or Gesamtpreis (not ohne-USt figures)."""
-    for label in ("zahlbetrag", "gesamtpreis"):
+    """Sum Zahlbetrag across invoices; else sum Gesamtpreis (avoid double-counting)."""
+
+    def _collect(label):
+        found = []
         for line in lines:
-            if label not in line.lower():
+            lowered = line.lower()
+            if label not in lowered:
                 continue
-            if "ohne ust" in line.lower():
+            if "ohne ust" in lowered:
                 continue
             amounts = [parse_amount(m.group(1)) for m in _AMOUNT_RE.finditer(line)]
             amounts = [a for a in amounts if a is not None]
             if amounts:
-                return amounts[-1]
+                found.append(amounts[-1])
+        return found
+
+    zahl = _collect("zahlbetrag")
+    if zahl:
+        return round(sum(zahl), 2)
+    gesamt = _collect("gesamtpreis")
+    if gesamt:
+        return round(sum(gesamt), 2)
     return None
 
 
 def _amazon_tax_block(lines):
-    """Return (netto subtotal, tax) from the USt. Gesamt summary when present."""
+    """Return (netto subtotal, tax), summing all USt. Gesamt rows across invoices."""
+    subtotals = []
+    taxes = []
     for line in lines:
         if not re.search(r"USt\.?\s*Gesamt", line, re.I):
             continue
         amounts = [parse_amount(m.group(1)) for m in _AMOUNT_RE.finditer(line)]
         amounts = [a for a in amounts if a is not None]
         if len(amounts) >= 2:
-            return amounts[-2], amounts[-1]
-        if len(amounts) == 1:
-            return None, amounts[0]
-    return None, None
+            subtotals.append(amounts[-2])
+            taxes.append(amounts[-1])
+        elif len(amounts) == 1:
+            taxes.append(amounts[0])
+    if not subtotals and not taxes:
+        return None, None
+    subtotal = round(sum(subtotals), 2) if subtotals else None
+    tax = round(sum(taxes), 2) if taxes else None
+    return subtotal, tax
 
 
-def _amazon_line_items(lines):
-    """Extract product rows from Rechnungsdetails; skip zero Versandkosten."""
+def _amazon_detail_blocks(lines):
+    """Yield (start, end) slices for every Rechnungsdetails … Gesamtpreis/USt. Gesamt block."""
+    blocks = []
     start = None
-    end = len(lines)
     for index, line in enumerate(lines):
         lowered = line.lower()
-        if start is None and "rechnungsdetails" in lowered:
+        if "rechnungsdetails" in lowered:
+            if start is not None:
+                blocks.append((start, index))
             start = index + 1
             continue
         if start is not None and (
             lowered.startswith("gesamtpreis")
             or re.search(r"ust\.?\s*gesamt", lowered)
         ):
-            end = index
-            break
-    if start is None:
-        start = 0
+            blocks.append((start, index))
+            start = None
+    if start is not None:
+        blocks.append((start, len(lines)))
+    if not blocks:
+        blocks.append((0, len(lines)))
+    return blocks
 
+
+def _amazon_line_items_in_block(block_lines):
+    """Parse product/shipping rows inside one Rechnungsdetails window."""
     items = []
     pending = None
-    for line in lines[start:end]:
+    for line in block_lines:
         lowered = line.lower()
         if lowered.startswith("beschreibung") or "stückpreis" in lowered:
             continue
@@ -637,6 +663,14 @@ def _amazon_line_items(lines):
 
     if pending:
         items.append(pending)
+    return items
+
+
+def _amazon_line_items(lines):
+    """Extract product rows from every Rechnungsdetails block; skip zero Versandkosten."""
+    items = []
+    for start, end in _amazon_detail_blocks(lines):
+        items.extend(_amazon_line_items_in_block(lines[start:end]))
     return items
 
 

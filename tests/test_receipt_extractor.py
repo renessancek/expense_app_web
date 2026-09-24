@@ -22,6 +22,7 @@ from receipt_extractor import (
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 AMAZON_EU_INVOICE = (FIXTURES / "amazon_eu_invoice.txt").read_text(encoding="utf-8")
+AMAZON_EU_MULTI_INVOICE = (FIXTURES / "amazon_eu_multi_invoice.txt").read_text(encoding="utf-8")
 
 GERMAN_RECEIPT = """
 Kassenbon
@@ -296,6 +297,24 @@ class TestAmazonInvoice(unittest.TestCase):
         self.assertEqual(by_name["Widget Pro"]["amount"], 36.0)
         self.assertIn("Versandkosten", by_name)
         self.assertEqual(by_name["Versandkosten"]["amount"], 4.85)
+
+
+
+    def test_amazon_multi_invoice_sums_sections(self):
+        parsed = parse_receipt_text(AMAZON_EU_MULTI_INVOICE)
+        self.assertEqual(parsed["merchant"], "Amazon")
+        self.assertEqual(parsed["date"], "2026-09-02")
+        self.assertEqual(parsed["currency"], "EUR")
+        self.assertEqual(parsed["total"], 97.13)
+        self.assertEqual(parsed["subtotal"], 80.94)
+        self.assertEqual(parsed["tax"], 16.19)
+        self.assertEqual(len(parsed["items"]), 2)
+        amounts = sorted(item["amount"] for item in parsed["items"])
+        self.assertEqual(amounts, [10.07, 87.06])
+        descriptions = " ".join(item["description"] for item in parsed["items"])
+        self.assertIn("Filterbeutel", descriptions)
+        self.assertIn("Allesschneider", descriptions)
+        self.assertNotIn("ASIN", descriptions)
 
 
 
