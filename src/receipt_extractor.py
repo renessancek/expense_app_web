@@ -38,6 +38,46 @@ _QTY_UNIT_LINE_RE = re.compile(
 )
 _ISO_DATE_RE = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b")
 _EU_DATE_RE = re.compile(r"\b(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})\b")
+_MONTH_NAME_TO_NUM = {
+    "januar": 1, "january": 1,
+    "februar": 2, "february": 2,
+    "maerz": 3, "märz": 3, "march": 3,
+    "april": 4,
+    "mai": 5, "may": 5,
+    "juni": 6, "june": 6,
+    "juli": 7, "july": 7,
+    "august": 8,
+    "september": 9,
+    "oktober": 10, "october": 10,
+    "november": 11,
+    "dezember": 12, "december": 12,
+}
+_NAMED_DATE_RE = re.compile(
+    r"\b(?P<day>\d{1,2})\.?\s+"
+    r"(?P<month>Januar|February|Februar|März|Maerz|March|April|Mai|May|"
+    r"Juni|June|Juli|July|August|September|Oktober|October|November|"
+    r"Dezember|December)\s+"
+    r"(?P<year>\d{4})\b",
+    re.I,
+)
+_AMAZON_EU_RE = re.compile(r"Amazon\s+EU\b", re.I)
+_AMAZON_WORD_RE = re.compile(r"\bAmazon\b", re.I)
+_BESTELLNUMMER_RE = re.compile(r"\bBestellnummer\b", re.I)
+_ASIN_RE = re.compile(r"\bASIN:\s*B[0-9A-Z]{9,10}\b", re.I)
+_AMAZON_ITEM_RE = re.compile(
+    rf"^(?P<desc>.+?)\s+(?P<qty>\d+)\s+"
+    rf"(?P<net>{_AMOUNT_TOKEN})\s*€?\s+"
+    rf"(?P<vat>\d+(?:[.,]\d+)?)\s*%\s+"
+    rf"(?P<gross_unit>{_AMOUNT_TOKEN})\s*€?\s+"
+    rf"(?P<gross>{_AMOUNT_TOKEN})\s*€?\s*$",
+    re.I,
+)
+_AMAZON_SHIPPING_RE = re.compile(
+    rf"^Versandkosten\b.*?\s+(?P<a1>{_AMOUNT_TOKEN})\s*€?"
+    rf"(?:\s+(?P<a2>{_AMOUNT_TOKEN})\s*€?)?"
+    rf"(?:\s+(?P<a3>{_AMOUNT_TOKEN})\s*€?)?\s*$",
+    re.I,
+)
 _TOTAL_RE = re.compile(r"\b(summe|gesamt(?:betrag|summe)?|total|endbetrag|zu\s*zahlen)\b", re.I)
 _SUBTOTAL_RE = re.compile(r"\b(zwischensumme|subtotal|netto)\b", re.I)
 _TAX_RE = re.compile(r"\b(mwst|m\.?\s*w\.?\s*st\.?|ust|u\.?\s*st\.?|vat|mehrwertsteuer)\b", re.I)
@@ -325,6 +365,8 @@ def tables_to_text(tables):
 
 def parse_receipt_text(text):
     """Heuristic parse of German/EU receipt text into merchant, totals, and items."""
+    if _is_amazon_invoice(text):
+        return _parse_amazon_invoice(text)
     lines = [re.sub(r"\s+", " ", line).strip() for line in str(text or "").splitlines()]
     lines = [line for line in lines if line]
     merchant = _guess_merchant(lines)
@@ -409,10 +451,21 @@ def parse_amount(token):
 
 
 def parse_date(text):
-    """Return YYYY-MM-DD from a European or ISO date in text, or None."""
+    """Return YYYY-MM-DD from a European, named-month, or ISO date in text, or None."""
     iso = _ISO_DATE_RE.search(text or "")
     if iso:
         return f"{iso.group(1)}-{iso.group(2)}-{iso.group(3)}"
+    named = _NAMED_DATE_RE.search(text or "")
+    if named:
+        month_key = named.group("month").lower().replace("ä", "ae")
+        month_i = _MONTH_NAME_TO_NUM.get(month_key) or _MONTH_NAME_TO_NUM.get(
+            named.group("month").lower()
+        )
+        if month_i:
+            day_i = int(named.group("day"))
+            year_i = int(named.group("year"))
+            if 1 <= day_i <= 31:
+                return f"{year_i:04d}-{month_i:02d}-{day_i:02d}"
     match = _EU_DATE_RE.search(text or "")
     if not match:
         return None
@@ -433,6 +486,158 @@ def format_receipt_debug(result):
     payload = {key: value for key, value in (result or {}).items() if key != "raw_text"}
     raw = (result or {}).get("raw_text") or ""
     return "=== Raw text ===\n" f"{raw}\n\n" "=== JSON ===\n" + json.dumps(payload, indent=2, ensure_ascii=False)
+
+
+
+def _is_amazon_invoice(text):
+    """True when strong Amazon EU invoice markers are present in OCR/PDF text."""
+    raw = text or ""
+    has_amazon_eu = bool(_AMAZON_EU_RE.search(raw))
+    has_amazon = bool(_AMAZON_WORD_RE.search(raw))
+    has_bestellnummer = bool(_BESTELLNUMMER_RE.search(raw))
+    has_asin = bool(_ASIN_RE.search(raw))
+    if has_amazon_eu and has_bestellnummer:
+        return True
+    if has_asin and has_amazon:
+        return True
+    return False
+
+
+def _parse_amazon_invoice(text):
+    """Parse Amazon EU seller invoices (Bestellinformationen / Rechnungsdetails)."""
+    lines = [re.sub(r"\s+", " ", line).strip() for line in str(text or "").splitlines()]
+    lines = [line for line in lines if line]
+    date = _amazon_invoice_date(lines)
+    total = _amazon_gross_total(lines)
+    subtotal, tax = _amazon_tax_block(lines)
+    items = _amazon_line_items(lines)
+    return {
+        "merchant": "Amazon",
+        "date": date,
+        "currency": "EUR",
+        "subtotal": subtotal,
+        "tax": tax,
+        "total": total,
+        "notes": "",
+        "raw_text": text or "",
+        "items": items,
+        "merchant_category": None,
+    }
+
+
+def _amazon_invoice_date(lines):
+    """Prefer Rechnungsdatum; fall back to Bestelldatum / any named date."""
+    preferred = None
+    fallback = None
+    for line in lines:
+        lowered = line.lower()
+        parsed = parse_date(line)
+        if not parsed:
+            continue
+        if "rechnungsdatum" in lowered or "lieferdatum" in lowered:
+            return parsed
+        if "bestelldatum" in lowered:
+            preferred = preferred or parsed
+        else:
+            fallback = fallback or parsed
+    return preferred or fallback
+
+
+def _amazon_gross_total(lines):
+    """Gross amount from Zahlbetrag or Gesamtpreis (not ohne-USt figures)."""
+    for label in ("zahlbetrag", "gesamtpreis"):
+        for line in lines:
+            if label not in line.lower():
+                continue
+            if "ohne ust" in line.lower():
+                continue
+            amounts = [parse_amount(m.group(1)) for m in _AMOUNT_RE.finditer(line)]
+            amounts = [a for a in amounts if a is not None]
+            if amounts:
+                return amounts[-1]
+    return None
+
+
+def _amazon_tax_block(lines):
+    """Return (netto subtotal, tax) from the USt. Gesamt summary when present."""
+    for line in lines:
+        if not re.search(r"USt\.?\s*Gesamt", line, re.I):
+            continue
+        amounts = [parse_amount(m.group(1)) for m in _AMOUNT_RE.finditer(line)]
+        amounts = [a for a in amounts if a is not None]
+        if len(amounts) >= 2:
+            return amounts[-2], amounts[-1]
+        if len(amounts) == 1:
+            return None, amounts[0]
+    return None, None
+
+
+def _amazon_line_items(lines):
+    """Extract product rows from Rechnungsdetails; skip zero Versandkosten."""
+    start = None
+    end = len(lines)
+    for index, line in enumerate(lines):
+        lowered = line.lower()
+        if start is None and "rechnungsdetails" in lowered:
+            start = index + 1
+            continue
+        if start is not None and (
+            lowered.startswith("gesamtpreis")
+            or re.search(r"ust\.?\s*gesamt", lowered)
+        ):
+            end = index
+            break
+    if start is None:
+        start = 0
+
+    items = []
+    pending = None
+    for line in lines[start:end]:
+        lowered = line.lower()
+        if lowered.startswith("beschreibung") or "stückpreis" in lowered:
+            continue
+        if "(ohne ust" in lowered or "(inkl. ust" in lowered:
+            continue
+        if _ASIN_RE.search(line) or lowered.startswith("asin:"):
+            continue
+
+        shipping = _AMAZON_SHIPPING_RE.match(line)
+        if shipping or lowered.startswith("versandkosten"):
+            if pending:
+                items.append(pending)
+                pending = None
+            amounts = [parse_amount(m.group(1)) for m in _AMOUNT_RE.finditer(line)]
+            amounts = [a for a in amounts if a is not None]
+            ship_amount = amounts[-1] if amounts else 0.0
+            if ship_amount and abs(ship_amount) > 0.001:
+                item = _item_dict("Versandkosten", 1, ship_amount)
+                if item:
+                    items.append(item)
+            continue
+
+        match = _AMAZON_ITEM_RE.match(line)
+        if match:
+            if pending:
+                items.append(pending)
+            description = match.group("desc").strip()
+            amount = parse_amount(match.group("gross"))
+            qty = match.group("qty")
+            pending = _item_dict(description, qty, amount)
+            continue
+
+        if pending and _looks_like_item_description(line) and not _AMOUNT_RE.search(line):
+            if not re.search(r"\b(menge|ust\.?\s*%|zwischensumme)\b", line, re.I):
+                pending["description"] = f"{pending['description']} {line}".strip()
+            continue
+
+        # Non-Amazon-shaped amount line inside the block: ignore (headers/noise).
+        if pending and _AMOUNT_RE.search(line):
+            items.append(pending)
+            pending = None
+
+    if pending:
+        items.append(pending)
+    return items
 
 
 def _page_text(page):

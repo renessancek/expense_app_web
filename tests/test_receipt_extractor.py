@@ -10,13 +10,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from receipt_extractor import (
     MAX_PAGES,
     ReceiptExtractError,
+    _is_amazon_invoice,
     attach_categories,
     extract_receipt,
     extract_receipt_folder,
     list_receipt_files,
+    parse_date,
     parse_receipt_text,
     render_pdf_page_ppm,
 )
+
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+AMAZON_EU_INVOICE = (FIXTURES / "amazon_eu_invoice.txt").read_text(encoding="utf-8")
 
 GERMAN_RECEIPT = """
 Kassenbon
@@ -231,6 +236,67 @@ class TestExtractReceipt(unittest.TestCase):
         attach_categories(parsed, None)
         self.assertIsNone(parsed["merchant_category"])
         self.assertIsNone(parsed["items"][0]["category"])
+
+
+
+class TestAmazonInvoice(unittest.TestCase):
+
+    def test_detects_amazon_eu_invoice(self):
+        self.assertTrue(_is_amazon_invoice(AMAZON_EU_INVOICE))
+        self.assertFalse(_is_amazon_invoice(GERMAN_RECEIPT))
+        self.assertFalse(_is_amazon_invoice("Some shop\nASIN: B00ANON0001\nSUMME 1,00"))
+        self.assertTrue(
+            _is_amazon_invoice(
+                "Order from Amazon marketplace\nASIN: B00ANON0001\nItem 1,00\n"
+            )
+        )
+
+    def test_named_month_date_parsing(self):
+        self.assertEqual(parse_date("02 September 2026"), "2026-09-02")
+        self.assertEqual(parse_date("1. März 2025"), "2025-03-01")
+
+    def test_amazon_eu_fixture_fields(self):
+        parsed = parse_receipt_text(AMAZON_EU_INVOICE)
+        self.assertEqual(parsed["merchant"], "Amazon")
+        self.assertEqual(parsed["date"], "2026-09-02")
+        self.assertEqual(parsed["currency"], "EUR")
+        self.assertEqual(parsed["total"], 34.85)
+        self.assertEqual(parsed["subtotal"], 29.04)
+        self.assertEqual(parsed["tax"], 5.81)
+        self.assertGreaterEqual(len(parsed["items"]), 1)
+        item = parsed["items"][0]
+        self.assertIn("Intenso", item["description"])
+        self.assertIn("USB Stick", item["description"])
+        self.assertNotIn("ASIN", item["description"])
+        self.assertEqual(item["quantity"], 1.0)
+        self.assertEqual(item["amount"], 34.85)
+        descriptions = [row["description"] for row in parsed["items"]]
+        self.assertNotIn("Versandkosten", descriptions)
+        # Must not pick Zahlungsreferenznummer or net-only total.
+        self.assertNotIn("Zahlungsreferenznummer", parsed["merchant"] or "")
+        self.assertNotEqual(parsed["total"], 29.04)
+
+    def test_amazon_skips_zero_shipping_keeps_nonzero(self):
+        text = (
+            "Amazon EU S.à r.l.\n"
+            "Bestellnummer 306-0000000-0000001\n"
+            "Rechnungsdatum 02 September 2026\n"
+            "Zahlbetrag 40,85 €\n"
+            "Rechnungsdetails\n"
+            "Widget Pro 1 30,00 € 20% 36,00 € 36,00 €\n"
+            "ASIN: B0ABCDEF12\n"
+            "Versandkosten 4,85 € 4,85 € 4,85 €\n"
+            "Gesamtpreis 40,85 €\n"
+        )
+        parsed = parse_receipt_text(text)
+        self.assertEqual(parsed["merchant"], "Amazon")
+        self.assertEqual(parsed["total"], 40.85)
+        by_name = {item["description"]: item for item in parsed["items"]}
+        self.assertIn("Widget Pro", by_name)
+        self.assertEqual(by_name["Widget Pro"]["amount"], 36.0)
+        self.assertIn("Versandkosten", by_name)
+        self.assertEqual(by_name["Versandkosten"]["amount"], 4.85)
+
 
 
 if __name__ == "__main__":
