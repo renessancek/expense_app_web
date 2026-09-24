@@ -255,6 +255,28 @@ class TestAmazonInvoice(unittest.TestCase):
     def test_named_month_date_parsing(self):
         self.assertEqual(parse_date("02 September 2026"), "2026-09-02")
         self.assertEqual(parse_date("1. März 2025"), "2025-03-01")
+        self.assertEqual(parse_date("11 Sep 2026"), "2026-09-11")
+        self.assertEqual(parse_date("/Lieferdatum 11 Sep 2026"), "2026-09-11")
+        self.assertEqual(parse_date("Bestelldatum 03 Okt 2025"), "2025-10-03")
+
+
+    def test_amazon_media_abbreviated_date(self):
+        text = (
+            "Amazon Media EU S.à r.l.\n"
+            "Rechnungsdatum\n"
+            "/Lieferdatum 11 Sep 2026\n"
+            "Bestellnummer D01-0000000-0000001\n"
+            "Zahlbetrag 6,87 €\n"
+            "Rechnungsdetails\n"
+            "Sample Ebook Title 1 6,25 € 10% 6,87 € 6,87 €\n"
+            "ASIN: B00ANON0003\n"
+            "Gesamtpreis 6,87 €\n"
+        )
+        self.assertTrue(_is_amazon_invoice(text))
+        parsed = parse_receipt_text(text)
+        self.assertEqual(parsed["merchant"], "Amazon")
+        self.assertEqual(parsed["date"], "2026-09-11")
+        self.assertEqual(parsed["total"], 6.87)
 
     def test_amazon_eu_fixture_fields(self):
         parsed = parse_receipt_text(AMAZON_EU_INVOICE)
