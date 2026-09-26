@@ -386,16 +386,12 @@ def register_receipts_routes(app: FastAPI, templates: Jinja2Templates) -> None:
         )
 
     @app.post("/receipts/categories/save")
-    async def receipts_categories_save(
-        _: AuthDep,
-        description: list[str] = Form(default=[]),
-        category: list[str] = Form(default=[]),
-    ):
+    async def receipts_categories_save(request: Request, _: AuthDep):
         """Save category assignments for all Belegzeilen rows in one submit."""
-        if isinstance(description, str):
-            description = [description]
-        if isinstance(category, str):
-            category = [category]
+        # Starlette defaults max_fields=1000; each Belegzeile posts 2 fields.
+        form = await request.form(max_fields=50_000)
+        description = form.getlist("description")
+        category = form.getlist("category")
         if len(category) < len(description):
             category = list(category) + [""] * (len(description) - len(category))
         updated = 0

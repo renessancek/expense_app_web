@@ -1,14 +1,14 @@
 {% extends "base.html" %}
 {% block content %}
   <h1>Belegzeilen-Kategorien</h1>
-  <p class="muted">Gleich benannte Positionen (exakter Text) einer Kategorie zuweisen, z.&nbsp;B. „Banane“, „Bananen“ und „Bio-Banane“ → Obst. So lassen sich sachlich zusammengehörige Zeilen später zusammenfassen.</p>
+  <p class="muted">Gleich benannte Positionen (exakter Text) einer Kategorie zuweisen, z.&nbsp;B. „Banane“, „Bananen“ und „Bio-Banane“ → Obst. So lassen sich sachlich zusammengehörige Zeilen später zusammenfassen. Beim Speichern werden nur geänderte Zuordnungen gesendet.</p>
   {% if message %}<div class="flash ok">{{ message }}</div>{% endif %}
   {% if error %}<div class="flash err">{{ error }}</div>{% endif %}
 
   <div class="card">
     <h2>Belegzeilen ({{ lines|length }})</h2>
     {% if lines %}
-    <form action="/receipts/categories/save" method="post">
+    <form id="receipt-categories-form" action="/receipts/categories/save" method="post">
       <div class="row" style="margin-bottom:0.75rem;">
         <div class="field">
           <button type="submit">Speichern</button>
@@ -26,13 +26,14 @@
           </thead>
           <tbody>
             {% for line in lines %}
-            <tr>
+            <tr class="receipt-cat-row">
               <td>{{ line.description }}</td>
               <td class="num">{% if line.count %}{{ line.count }}{% else %}—{% endif %}</td>
               <td>
                 <input type="hidden" name="description" value="{{ line.description }}">
                 <input id="cat-{{ loop.index }}" type="text" name="category" list="receipt-category-suggestions"
-                       value="{{ line.category }}" placeholder="Kategorie (leer = Zuordnung löschen)" style="width:100%; min-width:10rem;">
+                       value="{{ line.category }}" data-original="{{ line.category }}"
+                       placeholder="Kategorie (leer = Zuordnung löschen)" style="width:100%; min-width:10rem;">
               </td>
               <td>{% if line.path %}<a href="/receipts/detail?path={{ line.path|urlencode }}">{% if line.file %}{{ line.file }}{% else %}Details{% endif %}</a>{% else %}—{% endif %}</td>
             </tr>
@@ -51,6 +52,26 @@
         </div>
       </div>
     </form>
+    <script>
+      (function () {
+        var form = document.getElementById("receipt-categories-form");
+        if (!form) return;
+        form.addEventListener("submit", function () {
+          var rows = form.querySelectorAll("tr.receipt-cat-row");
+          for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            var desc = row.querySelector('input[name="description"]');
+            var cat = row.querySelector('input[name="category"]');
+            if (!desc || !cat) continue;
+            var original = cat.getAttribute("data-original") || "";
+            var current = cat.value || "";
+            var unchanged = current === original;
+            desc.disabled = unchanged;
+            cat.disabled = unchanged;
+          }
+        });
+      })();
+    </script>
     {% else %}
     <p class="muted">Noch keine Belegzeilen. Bitte zuerst Belege scannen oder hochladen, oder eine Kategorie-Zuordnung speichern.</p>
     {% endif %}

@@ -537,5 +537,96 @@ class ReceiptItemCategoryTests(unittest.TestCase):
 
 
 
+class ReceiptsCategoriesSaveWebTests(unittest.TestCase):
+    """HTTP tests for POST /receipts/categories/save (diff + max_fields)."""
+
+    def _client(self, tmp: str):
+        from fastapi.testclient import TestClient
+        from web.deps import reset_store
+        from web.main import create_app
+
+        env = {
+            "EXPENSE_DATA_DIR": tmp,
+            "EXPENSE_AUTH_USER": "",
+            "EXPENSE_AUTH_PASSWORD": "",
+        }
+        patcher = mock.patch.dict(os.environ, env, clear=False)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        reset_store()
+        ensure_receipts_dirs()
+        receipts_db.reset_schema_flag()
+        return TestClient(create_app())
+
+    def test_categories_save_partial_diff_keeps_unchanged(self):
+        """Only submitted pairs are written; unsubmitted mappings stay."""
+        with tempfile.TemporaryDirectory() as tmp:
+            client = self._client(tmp)
+            set_receipt_item_category("item-keep", "KeepCat")
+            set_receipt_item_category("item-change", "OldCat")
+            set_receipt_item_category("item-clear", "ClearMe")
+            response = client.post(
+                "/receipts/categories/save",
+                data={
+                    "description": ["item-change", "item-clear", "item-new"],
+                    "category": ["NewCat", "", "Fresh"],
+                },
+                follow_redirects=False,
+            )
+            self.assertEqual(response.status_code, 303)
+            loc = response.headers.get("location", "")
+            self.assertIn("/receipts/categories?message=", loc)
+            self.assertIn("3", loc)
+            cats = load_receipt_item_categories()
+            self.assertEqual(cats.get("item-keep"), "KeepCat")
+            self.assertEqual(cats.get("item-change"), "NewCat")
+            self.assertNotIn("item-clear", cats)
+            self.assertEqual(cats.get("item-new"), "Fresh")
+
+    def test_categories_save_accepts_more_than_1000_form_fields(self):
+        """No-JS fallback: large full-form POST must not hit max_fields=1000."""
+        with tempfile.TemporaryDirectory() as tmp:
+            client = self._client(tmp)
+            n = 600
+            response = client.post(
+                "/receipts/categories/save",
+                data={
+                    "description": [f"item-{i:04d}" for i in range(n)],
+                    "category": ["TestCat"] * n,
+                },
+                follow_redirects=False,
+            )
+            self.assertEqual(response.status_code, 303, response.text[:500])
+            self.assertIn("/receipts/categories?message=", response.headers.get("location", ""))
+            self.assertNotIn("Too many fields", response.text)
+            cats = load_receipt_item_categories()
+            self.assertEqual(cats.get("item-0000"), "TestCat")
+            self.assertEqual(cats.get("item-0599"), "TestCat")
+            self.assertEqual(len(cats), n)
+
+    def test_categories_save_small_diff_with_many_existing(self):
+        """JS-diff style: small POST amid many existing mappings updates only those."""
+        with tempfile.TemporaryDirectory() as tmp:
+            client = self._client(tmp)
+            for i in range(600):
+                set_receipt_item_category(f"item-{i:04d}", "Base")
+            response = client.post(
+                "/receipts/categories/save",
+                data={
+                    "description": ["item-0001", "item-0500"],
+                    "category": ["Changed", ""],
+                },
+                follow_redirects=False,
+            )
+            self.assertEqual(response.status_code, 303)
+            cats = load_receipt_item_categories()
+            self.assertEqual(cats.get("item-0000"), "Base")
+            self.assertEqual(cats.get("item-0001"), "Changed")
+            self.assertNotIn("item-0500", cats)
+            self.assertEqual(cats.get("item-0599"), "Base")
+            self.assertEqual(len(cats), 599)
+
+
+
 if __name__ == "__main__":
     unittest.main()
