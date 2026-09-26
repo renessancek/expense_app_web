@@ -91,6 +91,7 @@ class ExportHelperTests(unittest.TestCase):
         self.assertEqual(len(year_block["monthly_tables"]), 1)
         jan = year_block["monthly_tables"][0]
         self.assertEqual(jan["title"], "2024-01")
+        self.assertAlmostEqual(jan["total"], 33.5)
         self.assertEqual(jan["columns"], ["category", "amount"])
         self.assertEqual(jan["rows"][-1]["category"], "Summe")
         self.assertAlmostEqual(jan["rows"][-1]["amount"], 33.5)
@@ -203,6 +204,62 @@ class TransactionsImportReportsTemplateTests(unittest.TestCase):
         self.assertNotIn(">Filtern<", html)
         self.assertNotIn("Zurücksetzen", html)
         self.assertIn('id="filter-form"', html)
+
+
+class AuswertungTemplateTests(unittest.TestCase):
+    def _render(self, **overrides):
+        templates_dir = ROOT / "src" / "web" / "templates"
+        env = Environment(loader=FileSystemLoader(str(templates_dir)))
+        context = {
+            "title": "Auswertung",
+            "nav": "auswertung",
+            "message": "",
+            "error": "",
+            "categories": ["Supermarkt"],
+            "selected_categories": ["Supermarkt"],
+            "has_expenses": True,
+            "report": {
+                "years": [
+                    {
+                        "year": 2026,
+                        "monthly_tables": [
+                            {
+                                "title": "2026-09",
+                                "total": 2000.0,
+                                "columns": ["category", "amount"],
+                                "rows": [
+                                    {"category": "Supermarkt", "amount": 2000.0},
+                                    {"category": "Summe", "amount": 2000.0},
+                                ],
+                            }
+                        ],
+                        "monthly_totals": {
+                            "columns": ["Month", "amount"],
+                            "rows": [
+                                {"Month": "2026-09", "amount": 2000.0},
+                                {"Month": "Summe", "amount": 2000.0},
+                            ],
+                        },
+                        "yearly_summary": {
+                            "columns": ["Year", "category", "amount"],
+                            "rows": [
+                                {"Year": 2026, "category": "Supermarkt", "amount": 2000.0},
+                                {"Year": 2026, "category": "Summe", "amount": 2000.0},
+                            ],
+                        },
+                    }
+                ],
+                "average_monthly": {"columns": ["category", "2026"], "rows": []},
+                "yearly_comparison": {"columns": ["category", "2026"], "rows": []},
+                "monthly_yearly_comparison": {"columns": ["month", "2026"], "rows": []},
+            },
+        }
+        context.update(overrides)
+        return env.get_template("auswertung.html").render(**context)
+
+    def test_month_header_includes_total(self):
+        html = self._render()
+        self.assertIn("2026-09 (2000.00 €)", html)
 
 
 if __name__ == "__main__":

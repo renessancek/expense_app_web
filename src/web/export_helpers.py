@@ -91,9 +91,11 @@ def _month_table(expenses: pd.DataFrame, month: str) -> dict:
         .sum()
         .sort_values("amount", ascending=False)
     )
-    total = pd.DataFrame([{"category": TOTAL_LABEL, "amount": summary["amount"].sum()}])
+    month_total = float(summary["amount"].sum()) if not summary.empty else 0.0
+    total = pd.DataFrame([{"category": TOTAL_LABEL, "amount": month_total}])
     return {
         "title": str(month),
+        "total": month_total,
         **_table(pd.concat([summary, total], ignore_index=True)),
     }
 

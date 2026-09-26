@@ -44,7 +44,7 @@
       {% for month in year_block.monthly_tables %}
       <details class="collapse nested">
         <summary>
-          <h3>{{ month.title }}</h3>
+          <h3>{{ month.title }} ({{ "%.2f"|format(month.total) }} €)</h3>
         </summary>
         <div class="table-scroll">
           <table>
