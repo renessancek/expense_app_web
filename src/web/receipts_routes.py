@@ -30,6 +30,7 @@ from web.receipts_state import (
     format_total_de,
     get_last_rows,
     list_receipt_line_category_rows,
+    load_receipt_item_categories,
     prune_missing_receipt_rows,
     receipt_name_taken,
     receipts_dir,
@@ -102,6 +103,34 @@ def _scan_receipts_folders(categorizer=None) -> tuple[list[dict], int, int]:
     # Drop DB entries whose files vanished from disk.
     prune_missing_receipt_rows()
     return rows, ok, failed
+
+
+
+def _detail_items_with_mapping(raw_items: list | None) -> list[dict]:
+    """Copy line items with category from the global description→category map.
+
+    When a description is in ``load_receipt_item_categories()``, that value
+    wins (so saves/clears show after redirect). Otherwise keep the stored
+    item category (e.g. OCR/categorizer suggestion) as the form starting
+    value — same idea as aggregate_receipt_items falling back to item.category.
+    """
+    mapping = load_receipt_item_categories()
+    out: list[dict] = []
+    for item in raw_items or []:
+        if not isinstance(item, dict):
+            continue
+        copy = dict(item)
+        desc = (copy.get("description") or "").strip()
+        if desc in mapping:
+            copy["category"] = mapping[desc]
+        else:
+            cat = copy.get("category")
+            if isinstance(cat, str):
+                copy["category"] = cat.strip()
+            else:
+                copy["category"] = cat or ""
+        out.append(copy)
+    return out
 
 
 def register_receipts_routes(app: FastAPI, templates: Jinja2Templates) -> None:
@@ -294,6 +323,14 @@ def register_receipts_routes(app: FastAPI, templates: Jinja2Templates) -> None:
                 status_code=303,
             )
         result = row.get("result") or {}
+        items = _detail_items_with_mapping(result.get("items") or [])
+        mapping = load_receipt_item_categories()
+        suggestions = sorted(
+            set(store.categorizer.get_all_categories())
+            | {c for c in mapping.values() if c}
+            | {i.get("category") for i in items if i.get("category")},
+            key=str.casefold,
+        )
         return templates.TemplateResponse(
             request,
             "receipts_detail.html",
@@ -302,7 +339,8 @@ def register_receipts_routes(app: FastAPI, templates: Jinja2Templates) -> None:
                 "nav": "receipts",
                 "row": row,
                 "result": result,
-                "items": result.get("items") or [],
+                "items": items,
+                "category_suggestions": suggestions,
                 "file_name": row.get("file") or resolved.name,
                 "path": str(resolved),
                 "date_extracted": row.get("date_extracted")
@@ -355,6 +393,38 @@ def register_receipts_routes(app: FastAPI, templates: Jinja2Templates) -> None:
             f"/receipts/detail?path={quote(str(resolved))}&message={quote(msg)}",
             status_code=303,
         )
+
+
+    @app.post("/receipts/detail/categories")
+    async def receipts_detail_categories(request: Request, _: AuthDep):
+        """Save Belegzeilen category mappings from the receipt detail form."""
+        form = await request.form(max_fields=50_000)
+        path = (form.get("path") or "").strip()
+        resolved = resolve_under_receipts(path)
+        if resolved is None:
+            return RedirectResponse(
+                f"/receipts?error={quote('Ungültiger Dateipfad.')}",
+                status_code=303,
+            )
+        detail_url = f"/receipts/detail?path={quote(str(resolved))}"
+        description = form.getlist("description")
+        category = form.getlist("category")
+        if len(category) < len(description):
+            category = list(category) + [""] * (len(description) - len(category))
+        updated = 0
+        for desc, cat in zip(description, category):
+            desc = (desc or "").strip()
+            if not desc:
+                continue
+            set_receipt_item_category(desc, (cat or "").strip())
+            updated += 1
+        if updated == 0:
+            return RedirectResponse(
+                f"{detail_url}&error={quote('Keine Änderungen zum Speichern.')}",
+                status_code=303,
+            )
+        msg = quote(f"{updated} Zuordnung(en) gespeichert.")
+        return RedirectResponse(f"{detail_url}&message={msg}", status_code=303)
 
     @app.get("/receipts/categories", response_class=HTMLResponse)
     async def receipts_categories_page(

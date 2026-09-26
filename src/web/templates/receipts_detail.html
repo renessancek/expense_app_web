@@ -65,29 +65,73 @@
 
   <div class="card">
     <h2>Positionen ({{ items|length }})</h2>
+    <p class="muted">Kategorien gelten global für gleich lautende Belegzeilen (wie unter Belegzeilen-Kategorien). Beim Speichern werden nur geänderte Zuordnungen gesendet.</p>
     {% if items %}
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Beschreibung</th>
-            <th class="num">Menge</th>
-            <th class="num">Betrag</th>
-            <th>Kategorie</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for item in items %}
-          <tr>
-            <td>{{ item.description }}</td>
-            <td class="num">{{ item.quantity }}</td>
-            <td class="num">{% if item.amount is not none %}{{ "%.2f"|format(item.amount) }} €{% else %}—{% endif %}</td>
-            <td>{{ item.category or "—" }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+    <form id="receipt-detail-categories-form" action="/receipts/detail/categories" method="post">
+      <input type="hidden" name="path" value="{{ path }}">
+      <div class="row" style="margin-bottom:0.75rem;">
+        <div class="field">
+          <button type="submit">Speichern</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Beschreibung</th>
+              <th class="num">Menge</th>
+              <th class="num">Betrag</th>
+              <th>Kategorie</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in items %}
+            <tr class="receipt-cat-row">
+              <td>{{ item.description }}</td>
+              <td class="num">{{ item.quantity }}</td>
+              <td class="num">{% if item.amount is not none %}{{ "%.2f"|format(item.amount) }} €{% else %}—{% endif %}</td>
+              <td>
+                <input type="hidden" name="description" value="{{ item.description }}">
+                <input id="detail-cat-{{ loop.index }}" type="text" name="category" list="receipt-detail-category-suggestions"
+                       value="{{ item.category }}" data-original="{{ item.category }}"
+                       placeholder="Kategorie (leer = Zuordnung löschen)" style="width:100%; min-width:10rem;">
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <datalist id="receipt-detail-category-suggestions">
+        {% for cat in category_suggestions %}
+        <option value="{{ cat }}"></option>
+        {% endfor %}
+      </datalist>
+      <div class="row" style="margin-top:0.75rem;">
+        <div class="field">
+          <button type="submit">Speichern</button>
+        </div>
+      </div>
+    </form>
+    <script>
+      (function () {
+        var form = document.getElementById("receipt-detail-categories-form");
+        if (!form) return;
+        form.addEventListener("submit", function () {
+          var rows = form.querySelectorAll("tr.receipt-cat-row");
+          for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            var desc = row.querySelector('input[name="description"]');
+            var cat = row.querySelector('input[name="category"]');
+            if (!desc || !cat) continue;
+            var original = cat.getAttribute("data-original") || "";
+            var current = cat.value || "";
+            var unchanged = current === original;
+            desc.disabled = unchanged;
+            cat.disabled = unchanged;
+          }
+        });
+      })();
+    </script>
     {% else %}
     <p class="muted">Keine Positionen erkannt.</p>
     {% endif %}

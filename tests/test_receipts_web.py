@@ -628,5 +628,162 @@ class ReceiptsCategoriesSaveWebTests(unittest.TestCase):
 
 
 
+
+class ReceiptsDetailCategoriesWebTests(unittest.TestCase):
+    """HTTP tests for editable categories on /receipts/detail."""
+
+    def _client(self, tmp: str):
+        from fastapi.testclient import TestClient
+        from web.deps import reset_store
+        from web.main import create_app
+
+        env = {
+            "EXPENSE_DATA_DIR": tmp,
+            "EXPENSE_AUTH_USER": "",
+            "EXPENSE_AUTH_PASSWORD": "",
+        }
+        patcher = mock.patch.dict(os.environ, env, clear=False)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        reset_store()
+        ensure_receipts_dirs()
+        receipts_db.reset_schema_flag()
+        return TestClient(create_app())
+
+    def _seed_receipt(self, tmp: str, name: str = "test-bon.pdf") -> Path:
+        root = ensure_receipts_dirs()
+        path = root / name
+        path.write_bytes(b"%PDF-fake-receipt")
+        row = {
+            "path": str(path.resolve()),
+            "file": name,
+            "status": "Extracted",
+            "error": "",
+            "merchant": "TestMarkt",
+            "date": "2024-06-15",
+            "total": 5.0,
+            "result": {
+                "merchant": "TestMarkt",
+                "date": "2024-06-15",
+                "total": 5.0,
+                "subtotal": 4.5,
+                "tax": 0.5,
+                "merchant_category": "",
+                "notes": "",
+                "raw_text": "TestMarkt",
+                "items": [
+                    {
+                        "description": "item-alpha",
+                        "quantity": 1,
+                        "amount": 1.5,
+                        "category": "",
+                    },
+                    {
+                        "description": "item-beta",
+                        "quantity": 2,
+                        "amount": 3.5,
+                        "category": "",
+                    },
+                ],
+            },
+        }
+        receipts_db.upsert_row_from_import_dict(
+            row, file_hash=receipts_db.hash_file(path)
+        )
+        return path.resolve()
+
+    def test_detail_shows_category_inputs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            client = self._client(tmp)
+            path = self._seed_receipt(tmp)
+            set_receipt_item_category("item-alpha", "Obst")
+            response = client.get(f"/receipts/detail?path={path}")
+            self.assertEqual(response.status_code, 200)
+            body = response.text
+            self.assertIn('action="/receipts/detail/categories"', body)
+            self.assertIn('name="category"', body)
+            self.assertIn('name="description"', body)
+            self.assertIn('list="receipt-detail-category-suggestions"', body)
+            self.assertIn('data-original="Obst"', body)
+            self.assertIn("item-alpha", body)
+            self.assertIn("item-beta", body)
+            # Menge/Betrag remain plain text, not inputs
+            self.assertIn('class="num">1.0</td>', body)
+            self.assertIn("1.50", body)
+            self.assertNotIn('name="quantity"', body)
+            self.assertNotIn('name="amount"', body)
+
+    def test_detail_categories_post_updates_and_reflects(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            client = self._client(tmp)
+            path = self._seed_receipt(tmp)
+            set_receipt_item_category("item-keep-elsewhere", "KeepCat")
+            set_receipt_item_category("item-alpha", "OldCat")
+            response = client.post(
+                "/receipts/detail/categories",
+                data={
+                    "path": str(path),
+                    "description": ["item-alpha", "item-beta"],
+                    "category": ["NewCat", "Dairy"],
+                },
+                follow_redirects=False,
+            )
+            self.assertEqual(response.status_code, 303)
+            loc = response.headers.get("location", "")
+            self.assertIn("/receipts/detail?", loc)
+            self.assertIn("message=", loc)
+            self.assertIn("2", loc)
+            cats = load_receipt_item_categories()
+            self.assertEqual(cats.get("item-alpha"), "NewCat")
+            self.assertEqual(cats.get("item-beta"), "Dairy")
+            self.assertEqual(cats.get("item-keep-elsewhere"), "KeepCat")
+
+            page = client.get(f"/receipts/detail?path={path}")
+            self.assertEqual(page.status_code, 200)
+            self.assertIn('data-original="NewCat"', page.text)
+            self.assertIn('data-original="Dairy"', page.text)
+            self.assertIn('value="NewCat"', page.text)
+            self.assertIn('value="Dairy"', page.text)
+
+    def test_detail_categories_post_partial_leaves_unsubmitted(self):
+        """Only submitted pairs are written; other mappings stay untouched."""
+        with tempfile.TemporaryDirectory() as tmp:
+            client = self._client(tmp)
+            path = self._seed_receipt(tmp)
+            set_receipt_item_category("item-alpha", "AlphaOld")
+            set_receipt_item_category("item-beta", "BetaKeep")
+            set_receipt_item_category("other-desc", "OtherKeep")
+            response = client.post(
+                "/receipts/detail/categories",
+                data={
+                    "path": str(path),
+                    "description": ["item-alpha"],
+                    "category": ["AlphaNew"],
+                },
+                follow_redirects=False,
+            )
+            self.assertEqual(response.status_code, 303)
+            cats = load_receipt_item_categories()
+            self.assertEqual(cats.get("item-alpha"), "AlphaNew")
+            self.assertEqual(cats.get("item-beta"), "BetaKeep")
+            self.assertEqual(cats.get("other-desc"), "OtherKeep")
+
+    def test_detail_categories_post_requires_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            client = self._client(tmp)
+            response = client.post(
+                "/receipts/detail/categories",
+                data={
+                    "description": ["item-alpha"],
+                    "category": ["X"],
+                },
+                follow_redirects=False,
+            )
+            self.assertEqual(response.status_code, 303)
+            loc = response.headers.get("location", "")
+            self.assertIn("/receipts?error=", loc)
+
+
+
 if __name__ == "__main__":
     unittest.main()
