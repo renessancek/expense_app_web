@@ -429,6 +429,56 @@ class ReceiptsStateHelpersTests(unittest.TestCase):
         self.assertNotIn("Pfand", labels)
         self.assertAlmostEqual(groups[0]["total"], 3.79)
 
+    def test_aggregate_excludes_irrelevant_category_from_sums(self):
+        """Marking Belegzeilen as Irrelevant must drop them from Positionen summiert."""
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.dict(os.environ, {"EXPENSE_DATA_DIR": tmp}):
+                receipts_db.reset_schema_flag()
+                ensure_receipts_dirs()
+                rows = [
+                    {
+                        "status": "Extracted",
+                        "date": "2024-08-01",
+                        "path": "/data/Rechnungen/a.pdf",
+                        "file": "a.pdf",
+                        "result": {
+                            "date": "2024-08-01",
+                            "items": [
+                                {
+                                    "description": "Buch A",
+                                    "amount": 10.0,
+                                    "category": "Bücher",
+                                },
+                                {
+                                    "description": "Buch B",
+                                    "amount": 5.0,
+                                    "category": "Bücher",
+                                },
+                                {
+                                    "description": "Brot",
+                                    "amount": 2.0,
+                                    "category": "Lebensmittel",
+                                },
+                            ],
+                        },
+                    },
+                ]
+                before = aggregate_receipt_items(rows)
+                self.assertEqual(len(before), 1)
+                self.assertAlmostEqual(before[0]["total"], 17.0)
+                by_before = {r["description"]: r["amount"] for r in before[0]["rows"]}
+                self.assertAlmostEqual(by_before["Bücher"], 15.0)
+
+                set_receipt_item_category("Buch A", "Irrelevant")
+                set_receipt_item_category("Buch B", "irrelevant")  # case-insensitive
+                after = aggregate_receipt_items(rows)
+                self.assertEqual(len(after), 1)
+                labels = [r["description"] for r in after[0]["rows"]]
+                self.assertEqual(labels, ["Lebensmittel"])
+                self.assertNotIn("Irrelevant", labels)
+                self.assertNotIn("Bücher", labels)
+                self.assertAlmostEqual(after[0]["total"], 2.0)
+                self.assertAlmostEqual(after[0]["rows"][0]["amount"], 2.0)
 
 
 class QuantityDisplayLineTests(unittest.TestCase):

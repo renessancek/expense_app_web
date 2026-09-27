@@ -9,6 +9,10 @@ from web import receipts_db
 
 NO_DATE_MONTH = "ohne Datum"
 
+# Categories excluded from "Positionen summiert" (case-insensitive).
+# Same idea as marking bank rows irrelevant: still assigned, not counted in totals.
+EXCLUDED_RECEIPT_AGGREGATE_CATEGORIES = frozenset({"irrelevant"})
+
 
 def data_root_for_receipts() -> Path:
     """Resolve writable root (EXPENSE_DATA_DIR or user data dir)."""
@@ -233,10 +237,10 @@ def aggregate_receipt_items(rows: list[dict] | None) -> list[dict]:
     Descriptions mapped in ``load_receipt_item_categories()`` (exact text) that
     share a category are summed into one row labeled with that category name.
     Lines without a category stay as their own description rows (exact text).
-    Quantity-display lines and negative amounts are skipped. Returns month
-    groups newest-first;
-    within each month, rows sorted by amount descending. Each group:
-    ``{month, rows: [{description, amount, path, file}, ...], total}``.
+    Quantity-display lines, negative amounts, and lines whose category is
+    ``Irrelevant`` (case-insensitive) are skipped. Returns month groups
+    newest-first; within each month, rows sorted by amount descending. Each
+    group: ``{month, rows: [{description, amount, path, file}, ...], total}``.
     ``path`` / ``file`` are from the first contributing receipt.
     """
     categories = load_receipt_item_categories()
@@ -277,6 +281,8 @@ def aggregate_receipt_items(rows: list[dict] | None) -> list[dict]:
                 item_cat = item.get("category")
                 if isinstance(item_cat, str) and item_cat.strip():
                     category = item_cat.strip()
+            if category and category.casefold() in EXCLUDED_RECEIPT_AGGREGATE_CATEGORIES:
+                continue
             # Bucket key: category name when assigned, else exact description.
             label = category if category else description
             key = (month, label)
