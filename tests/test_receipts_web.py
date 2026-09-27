@@ -21,6 +21,7 @@ from receipt_extractor import (  # noqa: E402
 )
 from web import receipts_db  # noqa: E402
 from web.receipts_state import (  # noqa: E402
+    DEFAULT_RECEIPT_ITEM_CATEGORY,
     aggregate_receipt_items,
     clear_last_rows,
     delete_receipt_from_cache,
@@ -186,8 +187,9 @@ class ReceiptsStateHelpersTests(unittest.TestCase):
                 before = aggregate_receipt_items(get_last_rows())
                 jan = before[0]
                 by_desc = {r["description"]: r["amount"] for r in jan["rows"]}
-                self.assertAlmostEqual(by_desc["Alpromil"], 3.99)
-                self.assertAlmostEqual(by_desc["Milch"], 2.58)
+                # Uncategorized lines default to Sonstiges (merged).
+                self.assertEqual(list(by_desc), [DEFAULT_RECEIPT_ITEM_CATEGORY])
+                self.assertAlmostEqual(by_desc[DEFAULT_RECEIPT_ITEM_CATEGORY], 6.57)
 
                 drop.unlink()
                 self.assertTrue(delete_receipt_from_cache(drop))
@@ -195,9 +197,8 @@ class ReceiptsStateHelpersTests(unittest.TestCase):
                 after = aggregate_receipt_items(get_last_rows())
                 self.assertEqual(len(after), 1)
                 only = {r["description"]: r["amount"] for r in after[0]["rows"]}
-                self.assertEqual(list(only), ["Milch"])
-                self.assertAlmostEqual(only["Milch"], 1.29)
-                self.assertNotIn("Alpromil", only)
+                self.assertEqual(list(only), [DEFAULT_RECEIPT_ITEM_CATEGORY])
+                self.assertAlmostEqual(only[DEFAULT_RECEIPT_ITEM_CATEGORY], 1.29)
                 clear_last_rows()
 
     def test_prune_missing_receipt_rows(self):
@@ -316,22 +317,25 @@ class ReceiptsStateHelpersTests(unittest.TestCase):
 
         feb = groups[0]
         self.assertAlmostEqual(feb["total"], 6.49)
-        self.assertEqual([r["description"] for r in feb["rows"]], ["Alpromil", "Brot"])
-        self.assertAlmostEqual(feb["rows"][0]["amount"], 3.99)
+        # Uncategorized → Sonstiges (Alpromil + Brot merged)
+        self.assertEqual(
+            [r["description"] for r in feb["rows"]],
+            [DEFAULT_RECEIPT_ITEM_CATEGORY],
+        )
+        self.assertAlmostEqual(feb["rows"][0]["amount"], 6.49)
         self.assertEqual(feb["rows"][0]["path"], "/data/Rechnungen/feb.pdf")
         self.assertEqual(feb["rows"][0]["file"], "feb.pdf")
-        self.assertEqual(feb["rows"][1]["path"], "/data/Rechnungen/feb.pdf")
 
         jan = groups[1]
         self.assertAlmostEqual(jan["total"], 9.27)
-        # Amount descending within month: Alpromil 7.98 before Milch 1.29
-        self.assertEqual([r["description"] for r in jan["rows"]], ["Alpromil", "Milch"])
-        self.assertAlmostEqual(jan["rows"][0]["amount"], 7.98)
-        self.assertAlmostEqual(jan["rows"][1]["amount"], 1.29)
+        self.assertEqual(
+            [r["description"] for r in jan["rows"]],
+            [DEFAULT_RECEIPT_ITEM_CATEGORY],
+        )
+        self.assertAlmostEqual(jan["rows"][0]["amount"], 9.27)
         self.assertNotIn("quantity", jan["rows"][0])
         self.assertEqual(jan["rows"][0]["path"], "/data/Rechnungen/jan.pdf")
         self.assertEqual(jan["rows"][0]["file"], "jan.pdf")
-        self.assertEqual(jan["rows"][1]["path"], "/data/Rechnungen/jan.pdf")
 
     def test_aggregate_keeps_first_receipt_path_when_descriptions_merge(self):
         rows = [
@@ -359,6 +363,7 @@ class ReceiptsStateHelpersTests(unittest.TestCase):
         groups = aggregate_receipt_items(rows)
         self.assertEqual(len(groups), 1)
         milk = groups[0]["rows"][0]
+        self.assertEqual(milk["description"], DEFAULT_RECEIPT_ITEM_CATEGORY)
         self.assertAlmostEqual(milk["amount"], 3.0)
         # First contributing receipt stays the detail link target.
         self.assertEqual(milk["path"], "/data/Rechnungen/a.pdf")
@@ -366,7 +371,7 @@ class ReceiptsStateHelpersTests(unittest.TestCase):
 
 
 
-    def test_aggregate_sums_same_category_keeps_uncategorized(self):
+    def test_aggregate_sums_same_category_defaults_uncategorized_to_sonstiges(self):
         with tempfile.TemporaryDirectory() as tmp:
             with mock.patch.dict(os.environ, {"EXPENSE_DATA_DIR": tmp}):
                 set_receipt_item_category("Bio-Bananen", "Bananen")
@@ -392,13 +397,14 @@ class ReceiptsStateHelpersTests(unittest.TestCase):
                 groups = aggregate_receipt_items(rows)
                 self.assertEqual(len(groups), 1)
                 labels = [r["description"] for r in groups[0]["rows"]]
-                # Category sum first by amount (4.70), then Milch (1.29)
-                self.assertEqual(labels, ["Bananen", "Milch"])
+                # Category sum first by amount (4.70), then Sonstiges (1.29)
+                self.assertEqual(labels, ["Bananen", DEFAULT_RECEIPT_ITEM_CATEGORY])
                 by = {r["description"]: r["amount"] for r in groups[0]["rows"]}
                 self.assertAlmostEqual(by["Bananen"], 4.70)
-                self.assertAlmostEqual(by["Milch"], 1.29)
+                self.assertAlmostEqual(by[DEFAULT_RECEIPT_ITEM_CATEGORY], 1.29)
                 self.assertNotIn("Bio-Bananen", by)
                 self.assertNotIn("SPG-Bananen", by)
+                self.assertNotIn("Milch", by)
 
 
 
@@ -424,9 +430,11 @@ class ReceiptsStateHelpersTests(unittest.TestCase):
         groups = aggregate_receipt_items(rows)
         self.assertEqual(len(groups), 1)
         labels = [r["description"] for r in groups[0]["rows"]]
-        self.assertEqual(labels, ["Brot", "Milch"])
+        self.assertEqual(labels, [DEFAULT_RECEIPT_ITEM_CATEGORY])
         self.assertNotIn("Leergut", labels)
         self.assertNotIn("Pfand", labels)
+        self.assertNotIn("Brot", labels)
+        self.assertNotIn("Milch", labels)
         self.assertAlmostEqual(groups[0]["total"], 3.79)
 
     def test_aggregate_excludes_irrelevant_category_from_sums(self):
@@ -535,10 +543,7 @@ class QuantityDisplayLineTests(unittest.TestCase):
         groups = aggregate_receipt_items(rows)
         self.assertEqual(len(groups), 1)
         descs = [r["description"] for r in groups[0]["rows"]]
-        self.assertEqual(
-            descs,
-            ["Alpro Rote Früchte Dattel B", "Alpro Blueb. Muffin B"],
-        )
+        self.assertEqual(descs, [DEFAULT_RECEIPT_ITEM_CATEGORY])
         self.assertAlmostEqual(groups[0]["total"], 9.76)
 
 
@@ -578,13 +583,153 @@ class ReceiptItemCategoryTests(unittest.TestCase):
                 self.assertEqual(by_desc["Banane"]["count"], 1)
                 self.assertEqual(by_desc["Banane"]["path"], "/data/Rechnungen/markt.pdf")
                 self.assertEqual(by_desc["Banane"]["file"], "markt.pdf")
-                self.assertEqual(by_desc["Bananen"]["category"], "")
+                self.assertEqual(
+                    by_desc["Bananen"]["category"], DEFAULT_RECEIPT_ITEM_CATEGORY
+                )
                 self.assertEqual(by_desc["Bananen"]["path"], "/data/Rechnungen/markt.pdf")
                 self.assertEqual(by_desc["Bio-Banane"]["count"], 0)
                 self.assertIsNone(by_desc["Bio-Banane"]["path"])
                 set_receipt_item_category("Banane", "")
                 self.assertNotIn("Banane", load_receipt_item_categories())
 
+
+class ReceiptItemCategorySyncAndDefaultTests(unittest.TestCase):
+    """Mapping↔receipt_items sync, item.category fallback, Sonstiges default."""
+
+    def test_item_category_without_mapping_shows_and_aggregates(self):
+        """Lines with only receipt_items.category (no mapping) still count."""
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.dict(os.environ, {"EXPENSE_DATA_DIR": tmp}):
+                receipts_db.reset_schema_flag()
+                ensure_receipts_dirs()
+                rows = [
+                    {
+                        "status": "Extracted",
+                        "date": "2026-09-05",
+                        "path": "/data/Rechnungen/books.pdf",
+                        "file": "books.pdf",
+                        "result": {
+                            "date": "2026-09-05",
+                            "items": [
+                                {
+                                    "description": "Roman XY",
+                                    "amount": 12.50,
+                                    "category": "Bücher",
+                                },
+                                {
+                                    "description": "Milch",
+                                    "amount": 1.29,
+                                    "category": "",
+                                },
+                            ],
+                        },
+                    }
+                ]
+                groups = aggregate_receipt_items(rows)
+                self.assertEqual(len(groups), 1)
+                self.assertEqual(groups[0]["month"], "2026-09")
+                by = {r["description"]: r["amount"] for r in groups[0]["rows"]}
+                self.assertAlmostEqual(by["Bücher"], 12.50)
+                self.assertAlmostEqual(by[DEFAULT_RECEIPT_ITEM_CATEGORY], 1.29)
+
+                lines = list_receipt_line_category_rows(rows)
+                by_desc = {r["description"]: r for r in lines}
+                self.assertEqual(by_desc["Roman XY"]["category"], "Bücher")
+                self.assertEqual(
+                    by_desc["Milch"]["category"], DEFAULT_RECEIPT_ITEM_CATEGORY
+                )
+                # No mapping rows invented for the defaults.
+                self.assertEqual(load_receipt_item_categories(), {})
+
+    def test_set_category_syncs_receipt_items_and_excludes_irrelevant(self):
+        """Belegzeilen save updates receipt_items.category and aggregation."""
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.dict(os.environ, {"EXPENSE_DATA_DIR": tmp}):
+                receipts_db.reset_schema_flag()
+                ensure_receipts_dirs()
+                path = Path(tmp) / "receipts" / "books.pdf"
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"%PDF-1")
+                receipts_db.upsert_row_from_import_dict(
+                    {
+                        "path": str(path),
+                        "file": "books.pdf",
+                        "status": "Extracted",
+                        "date": "2026-09-10",
+                        "result": {
+                            "date": "2026-09-10",
+                            "total": 20.0,
+                            "items": [
+                                {
+                                    "description": "Buch A",
+                                    "quantity": 1,
+                                    "amount": 10.0,
+                                    "category": "Bücher",
+                                },
+                                {
+                                    "description": "Buch B",
+                                    "quantity": 1,
+                                    "amount": 5.0,
+                                    "category": "Bücher",
+                                },
+                                {
+                                    "description": "Stift",
+                                    "quantity": 1,
+                                    "amount": 2.0,
+                                    "category": "",
+                                },
+                            ],
+                        },
+                    },
+                    file_hash="h1",
+                )
+                rows = get_last_rows()
+                before = aggregate_receipt_items(rows)
+                by_before = {
+                    r["description"]: r["amount"] for r in before[0]["rows"]
+                }
+                self.assertAlmostEqual(by_before["Bücher"], 15.0)
+                self.assertAlmostEqual(
+                    by_before[DEFAULT_RECEIPT_ITEM_CATEGORY], 2.0
+                )
+
+                set_receipt_item_category("Buch A", "Irrelevant")
+                self.assertEqual(
+                    load_receipt_item_categories()["Buch A"], "Irrelevant"
+                )
+                loaded = receipts_db.get_row_by_path(path)
+                by_item = {
+                    i["description"]: i["category"]
+                    for i in loaded["result"]["items"]
+                }
+                self.assertEqual(by_item["Buch A"], "Irrelevant")
+                # Unchanged sibling still Bücher on the line.
+                self.assertEqual(by_item["Buch B"], "Bücher")
+
+                after = aggregate_receipt_items(get_last_rows())
+                by_after = {
+                    r["description"]: r["amount"] for r in after[0]["rows"]
+                }
+                self.assertNotIn("Irrelevant", by_after)
+                self.assertAlmostEqual(by_after["Bücher"], 5.0)
+                self.assertAlmostEqual(
+                    by_after[DEFAULT_RECEIPT_ITEM_CATEGORY], 2.0
+                )
+
+                # Clearing mapping syncs item category to empty; UI → Sonstiges.
+                set_receipt_item_category("Buch A", "")
+                self.assertNotIn("Buch A", load_receipt_item_categories())
+                loaded2 = receipts_db.get_row_by_path(path)
+                by_item2 = {
+                    i["description"]: i["category"]
+                    for i in loaded2["result"]["items"]
+                }
+                self.assertEqual(by_item2["Buch A"], "")
+                lines = list_receipt_line_category_rows(get_last_rows())
+                by_line = {r["description"]: r["category"] for r in lines}
+                self.assertEqual(
+                    by_line["Buch A"], DEFAULT_RECEIPT_ITEM_CATEGORY
+                )
 
 
 class ReceiptsCategoriesSaveWebTests(unittest.TestCase):

@@ -22,6 +22,7 @@ from web.deps import AuthDep, StoreDep
 from web.receipts_state import (
     aggregate_receipt_items,
     delete_receipt_from_cache,
+    effective_receipt_item_category,
     ensure_receipts_dirs,
     find_row_by_path,
     format_date_de,
@@ -107,12 +108,11 @@ def _scan_receipts_folders(categorizer=None) -> tuple[list[dict], int, int]:
 
 
 def _detail_items_with_mapping(raw_items: list | None) -> list[dict]:
-    """Copy line items with category from the global description→category map.
+    """Copy line items with effective category for the detail form.
 
-    When a description is in ``load_receipt_item_categories()``, that value
-    wins (so saves/clears show after redirect). Otherwise keep the stored
-    item category (e.g. OCR/categorizer suggestion) as the form starting
-    value — same idea as aggregate_receipt_items falling back to item.category.
+    Same resolution as aggregation / Belegzeilen list: mapping → stored
+    ``item.category`` → ``Sonstiges``. Mapping wins so saves/clears show
+    after redirect.
     """
     mapping = load_receipt_item_categories()
     out: list[dict] = []
@@ -121,14 +121,11 @@ def _detail_items_with_mapping(raw_items: list | None) -> list[dict]:
             continue
         copy = dict(item)
         desc = (copy.get("description") or "").strip()
-        if desc in mapping:
-            copy["category"] = mapping[desc]
-        else:
-            cat = copy.get("category")
-            if isinstance(cat, str):
-                copy["category"] = cat.strip()
-            else:
-                copy["category"] = cat or ""
+        copy["category"] = effective_receipt_item_category(
+            desc,
+            mapping=mapping,
+            item_category=copy.get("category"),
+        )
         out.append(copy)
     return out
 

@@ -629,7 +629,13 @@ def save_categories(mapping: dict[str, str]) -> None:
 
 
 def set_category(description: str, category: str) -> None:
-    """Assign or clear a single description→category mapping."""
+    """Assign or clear a single description→category mapping.
+
+    Also syncs ``receipt_items.category`` for all lines whose trimmed
+    description matches, so aggregation fallback and SQL dumps stay
+    consistent with Belegzeilen edits. Clearing sets item category to
+    ``""`` (same empty value as the insert path).
+    """
     description = (description or "").strip()
     category = (category or "").strip()
     if not description:
@@ -641,12 +647,18 @@ def set_category(description: str, category: str) -> None:
                 "DELETE FROM receipt_item_categories WHERE description = ?",
                 (description,),
             )
+            item_category = ""
         else:
             conn.execute(
                 "INSERT INTO receipt_item_categories(description, category) VALUES (?, ?) "
                 "ON CONFLICT(description) DO UPDATE SET category = excluded.category",
                 (description, category),
             )
+            item_category = category
+        conn.execute(
+            "UPDATE receipt_items SET category = ? WHERE TRIM(description) = ?",
+            (item_category, description),
+        )
         conn.commit()
     finally:
         conn.close()

@@ -13,6 +13,30 @@ NO_DATE_MONTH = "ohne Datum"
 # Same idea as marking bank rows irrelevant: still assigned, not counted in totals.
 EXCLUDED_RECEIPT_AGGREGATE_CATEGORIES = frozenset({"irrelevant"})
 
+# Default when no mapping and no item.category — same as categorizer.suggest_category.
+DEFAULT_RECEIPT_ITEM_CATEGORY = "Sonstiges"
+
+
+def effective_receipt_item_category(
+    description: str | None = None,
+    *,
+    mapping: dict[str, str] | None = None,
+    item_category: str | None = None,
+) -> str:
+    """Resolve Belegzeile category like bank rows: mapping → item → Sonstiges.
+
+    ``Irrelevant`` is still a normal assigned value here; callers that build
+    Positionen summiert exclude it via ``EXCLUDED_RECEIPT_AGGREGATE_CATEGORIES``.
+    """
+    desc = (description or "").strip()
+    if mapping is not None and desc:
+        mapped = mapping.get(desc)
+        if isinstance(mapped, str) and mapped.strip():
+            return mapped.strip()
+    if isinstance(item_category, str) and item_category.strip():
+        return item_category.strip()
+    return DEFAULT_RECEIPT_ITEM_CATEGORY
+
 
 def data_root_for_receipts() -> Path:
     """Resolve writable root (EXPENSE_DATA_DIR or user data dir)."""
@@ -236,11 +260,12 @@ def aggregate_receipt_items(rows: list[dict] | None) -> list[dict]:
 
     Descriptions mapped in ``load_receipt_item_categories()`` (exact text) that
     share a category are summed into one row labeled with that category name.
-    Lines without a category stay as their own description rows (exact text).
-    Quantity-display lines, negative amounts, and lines whose category is
-    ``Irrelevant`` (case-insensitive) are skipped. Returns month groups
-    newest-first; within each month, rows sorted by amount descending. Each
-    group: ``{month, rows: [{description, amount, path, file}, ...], total}``.
+    Effective category is mapping → ``item.category`` → ``Sonstiges`` (same
+    default as bank ``suggest_category``). Quantity-display lines, negative
+    amounts, and lines whose category is ``Irrelevant`` (case-insensitive)
+    are skipped. Returns month groups newest-first; within each month, rows
+    sorted by amount descending. Each group:
+    ``{month, rows: [{description, amount, path, file}, ...], total}``.
     ``path`` / ``file`` are from the first contributing receipt.
     """
     categories = load_receipt_item_categories()
@@ -276,15 +301,15 @@ def aggregate_receipt_items(rows: list[dict] | None) -> list[dict]:
             # Drop refunds / negative OCR lines from Positionen summiert.
             if value < 0:
                 continue
-            category = categories.get(description)
-            if not category:
-                item_cat = item.get("category")
-                if isinstance(item_cat, str) and item_cat.strip():
-                    category = item_cat.strip()
-            if category and category.casefold() in EXCLUDED_RECEIPT_AGGREGATE_CATEGORIES:
+            category = effective_receipt_item_category(
+                description,
+                mapping=categories,
+                item_category=item.get("category"),
+            )
+            if category.casefold() in EXCLUDED_RECEIPT_AGGREGATE_CATEGORIES:
                 continue
-            # Bucket key: category name when assigned, else exact description.
-            label = category if category else description
+            # Bucket key is always the effective category (incl. Sonstiges).
+            label = category
             key = (month, label)
             bucket = buckets.get(key)
             if bucket is None:
@@ -356,10 +381,16 @@ def list_receipt_line_category_rows(rows: list[dict] | None = None) -> list[dict
     skipped. Sorted by description (case-insensitive). ``path`` / ``file``
     come from the first Extracted receipt that contained the line (for a
     detail-page link).
+
+    Category shown is the same effective value aggregation uses: mapping
+    first, else the first non-empty ``item.category`` seen for that
+    description, else ``Sonstiges`` (so unassigned lines match Positionen
+    summiert and bank-transaction defaults).
     """
     mapping = load_receipt_item_categories()
     counts: dict[str, int] = {}
     sources: dict[str, tuple[str | None, str | None]] = {}
+    item_categories: dict[str, str] = {}
     for row in rows if rows is not None else get_last_rows():
         if row.get("status") != "Extracted":
             continue
@@ -376,15 +407,24 @@ def list_receipt_line_category_rows(rows: list[dict] | None = None) -> list[dict
             counts[description] = counts.get(description, 0) + 1
             if description not in sources:
                 sources[description] = (receipt_path, receipt_file)
+            if description not in item_categories:
+                item_cat = item.get("category")
+                if isinstance(item_cat, str) and item_cat.strip():
+                    item_categories[description] = item_cat.strip()
 
     all_descriptions = set(counts) | set(mapping)
     out: list[dict] = []
     for description in sorted(all_descriptions, key=str.casefold):
         path, file_name = sources.get(description, (None, None))
+        category = effective_receipt_item_category(
+            description,
+            mapping=mapping,
+            item_category=item_categories.get(description),
+        )
         out.append(
             {
                 "description": description,
-                "category": mapping.get(description, ""),
+                "category": category,
                 "count": counts.get(description, 0),
                 "path": path,
                 "file": file_name,
