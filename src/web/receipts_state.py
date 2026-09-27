@@ -337,6 +337,11 @@ def set_receipt_item_category(description: str, category: str) -> None:
     receipts_db.set_category(description, category)
 
 
+def rename_receipt_category(old_name: str, new_name: str) -> int:
+    """Rename a category string across receipt mappings and stored line/merchant fields."""
+    return receipts_db.rename_category(old_name, new_name)
+
+
 def list_receipt_line_category_rows(rows: list[dict] | None = None) -> list[dict]:
     """Unique Belegzeilen with optional category, count, and source receipt.
 

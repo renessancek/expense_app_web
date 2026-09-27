@@ -650,3 +650,34 @@ def set_category(description: str, category: str) -> None:
         conn.commit()
     finally:
         conn.close()
+
+def rename_category(old_name: str, new_name: str) -> int:
+    """Replace category string ``old_name`` with ``new_name`` in all receipt stores.
+
+    Updates ``receipt_item_categories``, ``receipt_items.category``, and
+    ``receipts.merchant_category``. Returns the total number of rows changed.
+    No-op (returns 0) when names are empty or equal after strip.
+    """
+    old_name = (old_name or "").strip()
+    new_name = (new_name or "").strip()
+    if not old_name or not new_name or old_name == new_name:
+        return 0
+    conn = ensure_db()
+    try:
+        c1 = conn.execute(
+            "UPDATE receipt_item_categories SET category = ? WHERE category = ?",
+            (new_name, old_name),
+        ).rowcount
+        c2 = conn.execute(
+            "UPDATE receipt_items SET category = ? WHERE category = ?",
+            (new_name, old_name),
+        ).rowcount
+        c3 = conn.execute(
+            "UPDATE receipts SET merchant_category = ? WHERE merchant_category = ?",
+            (new_name, old_name),
+        ).rowcount
+        conn.commit()
+        return int(c1 or 0) + int(c2 or 0) + int(c3 or 0)
+    finally:
+        conn.close()
+

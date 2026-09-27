@@ -785,5 +785,115 @@ class ReceiptsDetailCategoriesWebTests(unittest.TestCase):
 
 
 
+
+class RulesRenameWebTests(unittest.TestCase):
+    """HTTP tests for POST /rules/rename (rules + receipt category strings)."""
+
+    def _client(self, tmp: str):
+        from fastapi.testclient import TestClient
+        from web.deps import reset_store
+        from web.main import create_app
+
+        env = {
+            "EXPENSE_DATA_DIR": tmp,
+            "EXPENSE_AUTH_USER": "",
+            "EXPENSE_AUTH_PASSWORD": "",
+        }
+        patcher = mock.patch.dict(os.environ, env, clear=False)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        reset_store()
+        ensure_receipts_dirs()
+        receipts_db.reset_schema_flag()
+        return TestClient(create_app())
+
+    def test_rules_page_shows_rename_controls(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            client = self._client(tmp)
+            from web.deps import get_store
+
+            store = get_store()
+            store.categorizer.add_rule(["rewe"], "Supermarkt")
+            response = client.get("/rules")
+            self.assertEqual(response.status_code, 200)
+            body = response.text
+            self.assertIn('action="/rules/rename"', body)
+            self.assertIn("Umbenennen", body)
+            self.assertIn('name="old_category"', body)
+            self.assertIn('name="new_category"', body)
+            self.assertIn("Supermarkt", body)
+
+    def test_rename_updates_rules_and_receipt_mappings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            client = self._client(tmp)
+            from web.deps import get_store
+
+            store = get_store()
+            store.categorizer.add_rule(["rewe"], "Supermarkt")
+            set_receipt_item_category("Bio-Milch", "Supermarkt")
+            set_receipt_item_category("Brot", "Backwaren")
+            response = client.post(
+                "/rules/rename",
+                data={"old_category": "Supermarkt", "new_category": "Lebensmittel"},
+                follow_redirects=False,
+            )
+            self.assertEqual(response.status_code, 303)
+            loc = response.headers.get("location", "")
+            self.assertIn("/rules?message=", loc)
+            self.assertIn("umbenannt", loc.lower())
+            cats = [r["category"] for r in store.categorizer.rules]
+            self.assertIn("Lebensmittel", cats)
+            self.assertNotIn("Supermarkt", cats)
+            self.assertEqual(store.categorizer.suggest_category("REWE MARKT"), "Lebensmittel")
+            mapping = load_receipt_item_categories()
+            self.assertEqual(mapping["Bio-Milch"], "Lebensmittel")
+            self.assertEqual(mapping["Brot"], "Backwaren")
+
+    def test_rename_merges_into_existing_category(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            client = self._client(tmp)
+            from web.deps import get_store
+
+            store = get_store()
+            store.categorizer.add_rule(["rewe"], "Supermarkt")
+            store.categorizer.add_rule(["aldi"], "Lebensmittel")
+            set_receipt_item_category("Milch", "Supermarkt")
+            response = client.post(
+                "/rules/rename",
+                data={"old_category": "Supermarkt", "new_category": "Lebensmittel"},
+                follow_redirects=False,
+            )
+            self.assertEqual(response.status_code, 303)
+            loc = response.headers.get("location", "")
+            self.assertIn("zusammengef", loc.lower())
+            cats = [r["category"] for r in store.categorizer.rules]
+            self.assertEqual(cats.count("Lebensmittel"), 1)
+            self.assertNotIn("Supermarkt", cats)
+            self.assertEqual(store.categorizer.suggest_category("REWE"), "Lebensmittel")
+            self.assertEqual(store.categorizer.suggest_category("ALDI"), "Lebensmittel")
+            self.assertEqual(load_receipt_item_categories()["Milch"], "Lebensmittel")
+
+    def test_rename_rejects_empty_new_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            client = self._client(tmp)
+            from web.deps import get_store
+
+            store = get_store()
+            store.categorizer.add_rule(["rewe"], "Supermarkt")
+            response = client.post(
+                "/rules/rename",
+                data={"old_category": "Supermarkt", "new_category": "   "},
+                follow_redirects=False,
+            )
+            self.assertEqual(response.status_code, 303)
+            loc = response.headers.get("location", "")
+            self.assertIn("/rules?error=", loc)
+            self.assertEqual(
+                [r["category"] for r in store.categorizer.rules],
+                ["Supermarkt"],
+            )
+
+
+
 if __name__ == "__main__":
     unittest.main()

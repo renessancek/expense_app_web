@@ -290,15 +290,42 @@ class Categorizer:
         return False
 
     def rename_category(self, old_name, new_name):
-        """Renames a category in all global rules."""
-        if not new_name or old_name == new_name:
+        """Rename ``old_name`` to ``new_name`` in global keyword rules.
+
+        Categories are plain strings. If ``new_name`` already exists, merge
+        keywords from ``old_name`` into that rule and drop the old rule
+        (rename-as-merge). Empty/whitespace ``new_name`` raises ValueError.
+        Returns True on success, False if ``old_name`` is missing or names
+        are equal after strip.
+        """
+        old_name = (old_name or "").strip()
+        new_name = (new_name or "").strip()
+        if not new_name:
+            raise ValueError("New category name must not be empty.")
+        if not old_name or old_name == new_name:
             return False
-            
-        # Update rules
+
+        old_rule = None
+        existing_target = None
         for rule in self.rules:
-            if rule['category'] == old_name:
-                rule['category'] = new_name
-                
+            if rule["category"] == old_name:
+                old_rule = rule
+            elif rule["category"] == new_name:
+                existing_target = rule
+
+        if old_rule is None:
+            return False
+
+        if existing_target is not None:
+            merged = list(existing_target["keywords"])
+            for keyword in old_rule["keywords"]:
+                if keyword not in merged:
+                    merged.append(keyword)
+            existing_target["keywords"] = merged
+            self.rules = [rule for rule in self.rules if rule is not old_rule]
+        else:
+            old_rule["category"] = new_name
+
         self._persist_rules()
         return True
 

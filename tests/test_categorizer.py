@@ -45,6 +45,26 @@ class TestCategorizer(unittest.TestCase):
         self.assertTrue(self.categorizer.rename_category("Supermarkt", "Groceries"))
         self.assertEqual(self.categorizer.suggest_category("REWE"), "Groceries")
 
+    def test_rename_category_rejects_empty_and_same_name(self):
+        self.categorizer.add_rule(["rewe"], "Supermarkt")
+        with self.assertRaises(ValueError):
+            self.categorizer.rename_category("Supermarkt", "   ")
+        self.assertFalse(self.categorizer.rename_category("Supermarkt", "Supermarkt"))
+        self.assertFalse(self.categorizer.rename_category("Missing", "Other"))
+        self.assertEqual(self.categorizer.suggest_category("REWE"), "Supermarkt")
+
+    def test_rename_category_merges_into_existing(self):
+        self.categorizer.add_rule(["rewe"], "Supermarkt")
+        self.categorizer.add_rule(["aldi"], "Lebensmittel")
+        self.assertTrue(self.categorizer.rename_category("Supermarkt", "Lebensmittel"))
+        categories = [rule["category"] for rule in self.categorizer.rules]
+        self.assertEqual(categories.count("Lebensmittel"), 1)
+        self.assertNotIn("Supermarkt", categories)
+        self.assertEqual(self.categorizer.suggest_category("REWE"), "Lebensmittel")
+        self.assertEqual(self.categorizer.suggest_category("ALDI SUED"), "Lebensmittel")
+        food = next(rule for rule in self.categorizer.rules if rule["category"] == "Lebensmittel")
+        self.assertEqual(sorted(food["keywords"]), ["aldi", "rewe"])
+
     def test_import_uses_rules_and_discards_legacy_mappings(self):
         self.categorizer.import_rules({
             "mappings": {"amazon": "Shopping"},

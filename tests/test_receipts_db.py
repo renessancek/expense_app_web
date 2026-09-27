@@ -194,6 +194,46 @@ class ReceiptsDbTests(unittest.TestCase):
         self.assertEqual(mapping2["Brot"], "Backwaren")
         self.assertEqual(mapping2["Banane"], "Obst")
 
+    def test_rename_category_updates_mappings_items_and_merchant(self):
+        """Rename replaces category strings in map, line items, and merchant_category."""
+        path = Path(self.tmp) / "receipts" / "bon.pdf"
+        path.write_bytes(b"%PDF-1")
+        receipts_db.upsert_row_from_import_dict(
+            {
+                "path": str(path),
+                "file": "bon.pdf",
+                "status": "Extracted",
+                "date": "2024-05-01",
+                "result": {
+                    "merchant": "Markt",
+                    "date": "2024-05-01",
+                    "total": 5.0,
+                    "merchant_category": "AltKat",
+                    "items": [
+                        {"description": "Milch", "quantity": 1, "amount": 1.0, "category": "AltKat"},
+                        {"description": "Brot", "quantity": 1, "amount": 2.0, "category": "Andere"},
+                    ],
+                },
+            },
+            file_hash="h1",
+        )
+        set_receipt_item_category("Milch", "AltKat")
+        set_receipt_item_category("Joghurt", "AltKat")
+        set_receipt_item_category("Kaese", "Andere")
+        changed = receipts_db.rename_category("AltKat", "NeuKat")
+        self.assertGreaterEqual(changed, 3)
+        mapping = load_receipt_item_categories()
+        self.assertEqual(mapping["Milch"], "NeuKat")
+        self.assertEqual(mapping["Joghurt"], "NeuKat")
+        self.assertEqual(mapping["Kaese"], "Andere")
+        loaded = receipts_db.get_row_by_path(path)
+        self.assertEqual(loaded["result"]["merchant_category"], "NeuKat")
+        by_desc = {i["description"]: i["category"] for i in loaded["result"]["items"]}
+        self.assertEqual(by_desc["Milch"], "NeuKat")
+        self.assertEqual(by_desc["Brot"], "Andere")
+        self.assertEqual(receipts_db.rename_category("AltKat", "NeuKat"), 0)
+        self.assertEqual(receipts_db.rename_category("", "X"), 0)
+
     def test_categories_survive_reocr(self):
         set_receipt_item_category("Milch", "Milchprodukte")
         path = Path(self.tmp) / "receipts" / "m.pdf"

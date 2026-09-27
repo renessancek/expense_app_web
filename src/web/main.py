@@ -23,7 +23,7 @@ from web.export_helpers import (
     selected_expenses_for_export,
 )
 from web.receipts_routes import register_receipts_routes
-from web.receipts_state import ensure_receipts_dirs, receipts_dir
+from web.receipts_state import ensure_receipts_dirs, receipts_dir, rename_receipt_category
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -175,6 +175,55 @@ def create_app() -> FastAPI:
             )
         store.reload(selected_files=store.selected_files)
         return RedirectResponse("/rules?message=Kategorie+aktualisiert.", status_code=303)
+
+    @app.post("/rules/rename")
+    async def rules_rename(
+        _: AuthDep,
+        store: StoreDep,
+        old_category: str = Form(...),
+        new_category: str = Form(...),
+    ):
+        old_category = old_category.strip()
+        new_category = new_category.strip()
+        if not old_category:
+            return RedirectResponse(
+                "/rules?error=Alte+Kategorie+fehlt.",
+                status_code=303,
+            )
+        if not new_category:
+            return RedirectResponse(
+                f"/rules?error={quote('Neuer Name darf nicht leer sein.')}",
+                status_code=303,
+            )
+        if old_category == new_category:
+            return RedirectResponse(
+                f"/rules?error={quote('Alter und neuer Name sind gleich.')}",
+                status_code=303,
+            )
+        target_existed = any(
+            rule.get("category") == new_category for rule in store.categorizer.rules
+        )
+        try:
+            ok = store.categorizer.rename_category(old_category, new_category)
+        except ValueError:
+            return RedirectResponse(
+                f"/rules?error={quote('Neuer Name darf nicht leer sein.')}",
+                status_code=303,
+            )
+        if not ok:
+            return RedirectResponse(
+                f"/rules?error={quote(f'Kategorie {old_category} nicht gefunden.')}",
+                status_code=303,
+            )
+        rename_receipt_category(old_category, new_category)
+        store.reload(selected_files=store.selected_files)
+        if target_existed:
+            message = (
+                f"Kategorie „{old_category}“ mit „{new_category}“ zusammengeführt."
+            )
+        else:
+            message = f"Kategorie in „{new_category}“ umbenannt."
+        return RedirectResponse(f"/rules?message={quote(message)}", status_code=303)
 
     @app.post("/rules/delete")
     async def rules_delete(
