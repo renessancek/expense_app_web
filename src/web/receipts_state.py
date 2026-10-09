@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from receipt_extractor import is_quantity_display_line
@@ -11,7 +12,27 @@ NO_DATE_MONTH = "ohne Datum"
 
 # Categories excluded from "Positionen summiert" (case-insensitive).
 # Same idea as marking bank rows irrelevant: still assigned, not counted in totals.
-EXCLUDED_RECEIPT_AGGREGATE_CATEGORIES = frozenset({"irrelevant"})
+EXCLUDED_RECEIPT_AGGREGATE_CATEGORIES = frozenset({"irrelevant", "pfand"})
+
+# Line descriptions excluded from "Positionen summiert" (bottle deposit lines).
+# Each pattern is matched case-insensitively against the stripped description
+# from its start as a whole word: "Pfand", "PFAND", "Pfand 0,25" match;
+# products merely containing the substring mid-word (e.g. "Pfandflasche",
+# "Dampfandruck") do not.
+EXCLUDED_RECEIPT_AGGREGATE_DESCRIPTIONS = (re.compile(r"^pfand\b", re.IGNORECASE),)
+
+
+def is_excluded_receipt_aggregate_line(description: str | None, category: str | None) -> bool:
+    """True if a Belegzeile must be left out of Positionen summiert.
+
+    Excluded when the effective category casefolds to one of
+    ``EXCLUDED_RECEIPT_AGGREGATE_CATEGORIES`` (``Irrelevant``, ``Pfand``) or the
+    stripped description matches ``EXCLUDED_RECEIPT_AGGREGATE_DESCRIPTIONS``.
+    """
+    if (category or "").strip().casefold() in EXCLUDED_RECEIPT_AGGREGATE_CATEGORIES:
+        return True
+    desc = (description or "").strip()
+    return any(p.search(desc) for p in EXCLUDED_RECEIPT_AGGREGATE_DESCRIPTIONS)
 
 # Default when no mapping and no item.category — same as categorizer.suggest_category.
 DEFAULT_RECEIPT_ITEM_CATEGORY = "Sonstiges"
@@ -262,8 +283,9 @@ def aggregate_receipt_items(rows: list[dict] | None) -> list[dict]:
     share a category are summed into one row labeled with that category name.
     Effective category is mapping → ``item.category`` → ``Sonstiges`` (same
     default as bank ``suggest_category``). Quantity-display lines, negative
-    amounts, and lines whose category is ``Irrelevant`` (case-insensitive)
-    are skipped. Returns month groups newest-first; within each month, rows
+    amounts, lines whose category is ``Irrelevant`` or ``Pfand``
+    (case-insensitive), and Pfand lines by description (see
+    ``is_excluded_receipt_aggregate_line``) are skipped. Returns month groups newest-first; within each month, rows
     sorted by amount descending. Each group:
     ``{month, rows: [{description, amount, path, file}, ...], total}``.
     ``path`` / ``file`` are from the first contributing receipt.
@@ -306,7 +328,7 @@ def aggregate_receipt_items(rows: list[dict] | None) -> list[dict]:
                 mapping=categories,
                 item_category=item.get("category"),
             )
-            if category.casefold() in EXCLUDED_RECEIPT_AGGREGATE_CATEGORIES:
+            if is_excluded_receipt_aggregate_line(description, category):
                 continue
             # Bucket key is always the effective category (incl. Sonstiges).
             label = category

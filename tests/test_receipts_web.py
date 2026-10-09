@@ -23,6 +23,7 @@ from web import receipts_db  # noqa: E402
 from web.receipts_state import (  # noqa: E402
     DEFAULT_RECEIPT_ITEM_CATEGORY,
     aggregate_receipt_items,
+    is_excluded_receipt_aggregate_line,
     clear_last_rows,
     delete_receipt_from_cache,
     ensure_receipts_dirs,
@@ -487,6 +488,49 @@ class ReceiptsStateHelpersTests(unittest.TestCase):
                 self.assertNotIn("Bücher", labels)
                 self.assertAlmostEqual(after[0]["total"], 2.0)
                 self.assertAlmostEqual(after[0]["rows"][0]["amount"], 2.0)
+
+    def test_aggregate_excludes_pfand_lines_from_sums(self):
+        """Pfand by description or by category must drop out of Positionen summiert."""
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.dict(os.environ, {"EXPENSE_DATA_DIR": tmp}):
+                receipts_db.reset_schema_flag()
+                ensure_receipts_dirs()
+                rows = [
+                    {
+                        "status": "Extracted",
+                        "date": "2024-10-05",
+                        "path": "/data/Rechnungen/t.pdf",
+                        "file": "t.pdf",
+                        "result": {
+                            "date": "2024-10-05",
+                            "items": [
+                                {"description": "Testsaft", "amount": 3.0, "category": "Getraenke"},
+                                {"description": "Pfand", "amount": 0.25, "category": "Getraenke"},
+                                {"description": "  PFAND 0,25 ", "amount": 0.25},
+                                {"description": "Flaschenrueckgabe X", "amount": 0.50, "category": "pfand"},
+                                {"description": "Dampfandruck Test", "amount": 4.0, "category": "Haushalt"},
+                            ],
+                        },
+                    },
+                ]
+                groups = aggregate_receipt_items(rows)
+                self.assertEqual(len(groups), 1)
+                by = {r["description"]: r["amount"] for r in groups[0]["rows"]}
+                self.assertEqual(set(by), {"Getraenke", "Haushalt"})
+                self.assertAlmostEqual(by["Getraenke"], 3.0)
+                self.assertAlmostEqual(by["Haushalt"], 4.0)
+                self.assertNotIn(DEFAULT_RECEIPT_ITEM_CATEGORY, by)
+                self.assertNotIn("pfand", {k.casefold() for k in by})
+                self.assertAlmostEqual(groups[0]["total"], 7.0)
+
+    def test_is_excluded_receipt_aggregate_line(self):
+        self.assertTrue(is_excluded_receipt_aggregate_line("Pfand", None))
+        self.assertTrue(is_excluded_receipt_aggregate_line(" pfand 0,25", "Sonstiges"))
+        self.assertTrue(is_excluded_receipt_aggregate_line("Wasser", "PFAND"))
+        self.assertTrue(is_excluded_receipt_aggregate_line("Buch", "Irrelevant"))
+        self.assertFalse(is_excluded_receipt_aggregate_line("Pfandflasche Test", "Sonstiges"))
+        self.assertFalse(is_excluded_receipt_aggregate_line("Dampfandruck", "Sonstiges"))
+        self.assertFalse(is_excluded_receipt_aggregate_line("Milch", "Lebensmittel"))
 
 
 class QuantityDisplayLineTests(unittest.TestCase):
