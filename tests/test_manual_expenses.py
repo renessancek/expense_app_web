@@ -197,7 +197,7 @@ class ManualExpensesWebTests(unittest.TestCase):
             self.assertIn("Ausgaben hinzufügen", html)
             self.assertIn("+ Zeile", html)
             self.assertIn(MANUAL_FILENAME, html)
-            self.assertEqual(html.count('name="description"'), 3)
+            self.assertEqual(html.count('name="description"'), 1)
 
     def test_post_rows_creates_csv_and_transactions(self):
         from web.deps import get_store
