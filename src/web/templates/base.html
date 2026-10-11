@@ -144,7 +144,7 @@
       user-select: none;
       pointer-events: none;
     }
-    input[type=text], input[type=file], select {
+    input[type=text], input[type=file], input[type=date], select {
       padding: 0.4rem 0.55rem;
       border: 1px solid var(--border);
       border-radius: 6px;
@@ -200,6 +200,10 @@
     .rule-row .field.grow textarea {
       width: 100%;
     }
+    .manual-row { align-items: flex-end; margin-bottom: 0.5rem; }
+    .manual-row .field.grow { flex: 1; min-width: 14rem; }
+    .manual-row .field.grow input { width: 100%; }
+    .manual-row .amount-input { min-width: 7rem; width: 8rem; }
     .table-scroll { overflow-x: auto; }
     tr.row-warn td { background: #fef2f2; }
     tr.row-total td { font-weight: 700; border-top: 1px solid var(--border); }

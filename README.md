@@ -5,6 +5,7 @@ A local FastAPI web app for importing, categorizing, and reviewing bank-statemen
 ## Features
 
 - Upload CSV bank statements or scan `BankStatements` under the data directory
+- Manually add expenses (several rows at once) on the Transaktionen page; stored in `BankStatements/manuelle_ausgaben.csv` (`Datum;Name;Betrag`, negative EU amounts) and editable/deletable there or via the collapsed list
 - Transaction list with category, month, and text filters
 - Rules: list, add, edit keywords, delete, import JSON/CSV, restore latest backup
 - Auswertung: yearly statistics report on the web (category filter, former Excel sheets)

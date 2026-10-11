@@ -2,6 +2,7 @@
 {% block content %}
   <h1>Transaktionen</h1>
   {% if message %}<div class="flash ok">{{ message }}</div>{% endif %}
+  {% if error %}<div class="flash err">{{ error }}</div>{% endif %}
 
   <div class="card">
     <h2>CSV importieren / Ordner scannen</h2>
@@ -24,6 +25,61 @@
         </div>
       </form>
     </div>
+  </div>
+
+  <div class="card">
+    <h2>Ausgaben manuell hinzufügen</h2>
+    <form id="manual-form" action="/manual/add" method="post">
+      <div id="manual-rows">
+        {% for i in range(3) %}
+        <div class="row manual-row">
+          <div class="field">
+            <label>Datum</label>
+            <input type="date" name="date" value="{{ today }}" required>
+          </div>
+          <div class="field grow">
+            <label>Beschreibung</label>
+            <input type="text" name="description" autocomplete="off">
+          </div>
+          <div class="field">
+            <label>Betrag (€)</label>
+            <input type="text" name="amount" inputmode="decimal" placeholder="12,50" class="amount-input" autocomplete="off">
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="row manual-row">
+        <button type="button" id="manual-add-row" class="secondary">+ Zeile</button>
+        <button type="submit">Ausgaben hinzufügen</button>
+      </div>
+    </form>
+    <p class="muted">Gespeichert in <code>BankStatements/{{ manual_filename }}</code>. Einträge können durch Bearbeiten dieser Datei korrigiert oder entfernt werden.</p>
+    {% if manual_entries %}
+    <details class="collapse nested">
+      <summary><h3>Manuelle Einträge ({{ manual_entries|length }})</h3></summary>
+      <table>
+        <thead>
+          <tr><th>Datum</th><th>Beschreibung</th><th class="num">Betrag</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for entry in manual_entries %}
+          <tr>
+            <td>{{ entry.date }}</td>
+            <td>{{ entry.description }}</td>
+            <td class="num">{{ entry.amount }} €</td>
+            <td class="num">
+              <form action="/manual/delete" method="post" onsubmit="return confirm('Eintrag löschen?');">
+                <input type="hidden" name="index" value="{{ entry.index }}">
+                <input type="hidden" name="token" value="{{ entry.token }}">
+                <button type="submit" class="danger">Löschen</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </details>
+    {% endif %}
   </div>
 
   <div class="card">
@@ -127,6 +183,22 @@
     <p><strong>Summe der angezeigten Transaktionen: {{ "%.2f"|format(listed_sum) }} €</strong></p>
   </div>
   <script>
+    (function () {
+      var button = document.getElementById("manual-add-row");
+      var rows = document.getElementById("manual-rows");
+      if (!button || !rows) return;
+      button.addEventListener("click", function () {
+        var template = rows.querySelector(".manual-row");
+        if (!template) return;
+        var clone = template.cloneNode(true);
+        clone.querySelectorAll("input").forEach(function (input) {
+          if (input.type !== "date") input.value = "";
+        });
+        rows.appendChild(clone);
+        var desc = clone.querySelector("input[name=description]");
+        if (desc) desc.focus();
+      });
+    })();
     (function () {
       var form = document.getElementById("filter-form");
       var search = document.getElementById("q");

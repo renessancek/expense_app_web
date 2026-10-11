@@ -8,6 +8,31 @@ from pathlib import Path
 import pandas as pd
 
 
+_ISO_DATE_RE = r"^\d{4}-\d{1,2}-\d{1,2}(?:$|[ T])"
+
+
+def parse_transaction_dates(values) -> pd.Series:
+    """Parse transaction date strings into timestamps.
+
+    Bank exports use day-first formats (``03.10.2026``), so the general path keeps
+    ``dayfirst=True``. ISO dates (``2026-10-03``, e.g. from manual entries) would be
+    misread as 10 March by that path, so they are parsed as ISO 8601 explicitly.
+    """
+    raw = pd.Series(values)
+    if raw.empty:
+        return pd.to_datetime(raw, dayfirst=True, format="mixed")
+    text = raw.astype(str).str.strip()
+    iso_mask = text.str.match(_ISO_DATE_RE)
+    if not iso_mask.any():
+        return pd.to_datetime(raw, dayfirst=True, format="mixed")
+    parts = [pd.to_datetime(text[iso_mask], format="ISO8601")]
+    if (~iso_mask).any():
+        parts.append(pd.to_datetime(raw[~iso_mask], dayfirst=True, format="mixed"))
+    # Align resolutions so concat keeps a datetime dtype (tz-aware parts stay as-is).
+    parts = [part if part.dt.tz is not None else part.astype("datetime64[ns]") for part in parts]
+    return pd.concat(parts).reindex(raw.index)
+
+
 REPORT_COLUMNS = [
     "File", "status", "rows_read", "imported_expenses", "skipped_non_expenses",
     "skipped_missing_data", "skipped_excluded", "skipped_errors", "details",
@@ -57,7 +82,7 @@ class ExpenseDataStore:
         if not self.transactions:
             return pd.DataFrame(columns=["date", "description", "amount", "category", "file"])
         frame = pd.DataFrame(self.transactions).copy()
-        frame["date"] = pd.to_datetime(frame["date"], dayfirst=True, format="mixed")
+        frame["date"] = parse_transaction_dates(frame["date"])
         frame["Month"] = frame["date"].dt.strftime("%Y-%m")
         return frame
 

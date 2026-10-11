@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import tempfile
+from datetime import date
 from pathlib import Path
 from urllib.parse import quote
 
@@ -21,6 +22,13 @@ from web.export_helpers import (
     default_export_selected,
     listed_amount_sum,
     selected_expenses_for_export,
+)
+from web.manual_expenses import (
+    MANUAL_FILENAME,
+    append_manual_expenses,
+    delete_manual_expense,
+    list_manual_expenses,
+    validate_rows,
 )
 from web.receipts_routes import register_receipts_routes
 from web.receipts_state import ensure_receipts_dirs, receipts_dir, rename_receipt_category
@@ -52,6 +60,7 @@ def create_app() -> FastAPI:
         month: str = "All",
         q: str = "",
         message: str = "",
+        error: str = "",
     ):
         frame = store.filtered(category=category or "All", month=month or "All", query=q or "")
         rows = []
@@ -74,8 +83,12 @@ def create_app() -> FastAPI:
                 "q": q or "",
                 "listed_sum": listed_amount_sum(frame),
                 "message": message,
+                "error": error,
                 "statements_path": str(statements_dir()),
                 "import_reports": store.import_reports,
+                "today": date.today().isoformat(),
+                "manual_filename": MANUAL_FILENAME,
+                "manual_entries": list_manual_expenses(),
                 "nav": "transactions",
             },
         )
@@ -104,6 +117,35 @@ def create_app() -> FastAPI:
             f"/?message=Importiert%3A+{safe_name}",
             status_code=303,
         )
+
+    @app.post("/manual/add")
+    async def manual_add(
+        _: AuthDep,
+        store: StoreDep,
+        date_: list[str] = Form(default=[], alias="date"),
+        description: list[str] = Form(default=[]),
+        amount: list[str] = Form(default=[]),
+    ):
+        entries, error = validate_rows(date_, description, amount)
+        if error:
+            return RedirectResponse(f"/?error={quote(error)}", status_code=303)
+        append_manual_expenses(entries)
+        store.reload()
+        message = f"{len(entries)} Ausgabe(n) hinzugefügt."
+        return RedirectResponse(f"/?message={quote(message)}", status_code=303)
+
+    @app.post("/manual/delete")
+    async def manual_delete(
+        _: AuthDep,
+        store: StoreDep,
+        index: int = Form(...),
+        token: str = Form(...),
+    ):
+        if not delete_manual_expense(index, token):
+            error = "Eintrag nicht gefunden (Datei wurde evtl. geändert)."
+            return RedirectResponse(f"/?error={quote(error)}", status_code=303)
+        store.reload()
+        return RedirectResponse(f"/?message={quote('Ausgabe gelöscht.')}", status_code=303)
 
     @app.post("/scan")
     async def scan_folder(_: AuthDep, store: StoreDep):
