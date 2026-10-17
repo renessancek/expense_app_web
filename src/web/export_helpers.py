@@ -27,6 +27,21 @@ MONTH_NAMES_DE = {
     12: "Dezember",
 }
 
+MONTH_ABBR_DE = {
+    1: "Jan",
+    2: "Feb",
+    3: "Mär",
+    4: "Apr",
+    5: "Mai",
+    6: "Jun",
+    7: "Jul",
+    8: "Aug",
+    9: "Sep",
+    10: "Okt",
+    11: "Nov",
+    12: "Dez",
+}
+
 
 def listed_amount_sum(frame: pd.DataFrame | None) -> float:
     """Return the numeric sum of amounts in a filtered transaction list."""
@@ -160,6 +175,39 @@ def _average_monthly_by_year(expenses: pd.DataFrame) -> dict:
     return _table(pivot)
 
 
+def _category_month_matrix(year_expenses: pd.DataFrame) -> dict:
+    """Category × calendar-month amounts for one year, plus a total column.
+
+    Every month is present so columns line up across years. Categories are
+    ordered by yearly total, largest first, with a Summe row at the bottom.
+    """
+    frame = year_expenses.copy()
+    frame["month_num"] = frame["date"].dt.month.astype(int)
+    pivot = frame.pivot_table(
+        index="category",
+        columns="month_num",
+        values="amount",
+        aggfunc="sum",
+        fill_value=0,
+    )
+    pivot = pivot.reindex(columns=list(range(1, 13)), fill_value=0).round(2)
+    pivot["total"] = pivot.sum(axis=1).round(2)
+    pivot = pivot.sort_values(["total", "category"], ascending=[False, True]).reset_index()
+    month_keys = [f"m{month_num}" for month_num in range(1, 13)]
+    pivot = pivot.rename(columns={month_num: f"m{month_num}" for month_num in range(1, 13)})
+    total_values: dict = {"category": TOTAL_LABEL}
+    for key in month_keys + ["total"]:
+        total_values[key] = round(float(pivot[key].sum()), 2)
+    pivot = pd.concat([pivot, pd.DataFrame([total_values])], ignore_index=True)
+    return {
+        "months": [
+            {"key": f"m{month_num}", "label": MONTH_ABBR_DE[month_num]}
+            for month_num in range(1, 13)
+        ],
+        "rows": _table(pivot)["rows"],
+    }
+
+
 def _monthly_yearly_comparison(expenses: pd.DataFrame) -> dict:
     """Calendar month × year pivot of absolute expense totals."""
     frame = expenses.copy()
@@ -190,9 +238,10 @@ def _monthly_yearly_comparison(expenses: pd.DataFrame) -> dict:
 def build_yearly_statistics_report(expenses: pd.DataFrame) -> dict:
     """Build the multi-section annual report as HTML-ready structures.
 
-    Years are newest-first. Each year carries its month tables (newest first),
-    monthly totals, and category summary. Global sections: average monthly
-    expenses (per year), category yearly comparison, and month × year totals.
+    Years are newest-first. Each year carries a category × month matrix, its
+    month tables (newest first), monthly totals, and category summary. Global
+    sections: average monthly expenses (per year), category yearly comparison,
+    and month × year totals.
     """
     empty_averages = {"columns": ["category"], "rows": []}
     empty_comparison = {"columns": ["category"], "rows": []}
@@ -213,6 +262,7 @@ def build_yearly_statistics_report(expenses: pd.DataFrame) -> dict:
         years_out.append(
             {
                 "year": int(year),
+                "category_months": _category_month_matrix(year_expenses),
                 "monthly_tables": [_month_table(year_expenses, m) for m in months],
                 "monthly_totals": _monthly_totals_for_year(year_expenses),
                 "yearly_summary": _yearly_summary_for_year(year_expenses, int(year)),

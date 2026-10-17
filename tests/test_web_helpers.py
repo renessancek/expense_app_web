@@ -88,6 +88,19 @@ class ExportHelperTests(unittest.TestCase):
         self.assertEqual(len(report["years"]), 1)
         year_block = report["years"][0]
         self.assertEqual(year_block["year"], 2024)
+        matrix = year_block["category_months"]
+        self.assertEqual([month["label"] for month in matrix["months"]], [
+            "Jan", "Feb", "Mär", "Apr", "Mai", "Jun",
+            "Jul", "Aug", "Sep", "Okt", "Nov", "Dez",
+        ])
+        by_category = {row["category"]: row for row in matrix["rows"]}
+        self.assertAlmostEqual(by_category["Supermarkt"]["m1"], 23.5)
+        self.assertAlmostEqual(by_category["Supermarkt"]["m2"], 0.0)
+        self.assertAlmostEqual(by_category["Supermarkt"]["total"], 23.5)
+        self.assertAlmostEqual(by_category["Amazon"]["m1"], 10.0)
+        self.assertEqual(matrix["rows"][-1]["category"], "Summe")
+        self.assertAlmostEqual(matrix["rows"][-1]["m1"], 33.5)
+        self.assertAlmostEqual(matrix["rows"][-1]["total"], 33.5)
         self.assertEqual(len(year_block["monthly_tables"]), 1)
         jan = year_block["monthly_tables"][0]
         self.assertEqual(jan["title"], "2024-01")
@@ -222,6 +235,26 @@ class AuswertungTemplateTests(unittest.TestCase):
                 "years": [
                     {
                         "year": 2026,
+                        "category_months": {
+                            "months": [
+                                {"key": "m1", "label": "Jan"},
+                                {"key": "m2", "label": "Feb"},
+                            ],
+                            "rows": [
+                                {
+                                    "category": "Supermarkt",
+                                    "m1": 1500.0,
+                                    "m2": 500.0,
+                                    "total": 2000.0,
+                                },
+                                {
+                                    "category": "Summe",
+                                    "m1": 1500.0,
+                                    "m2": 500.0,
+                                    "total": 2000.0,
+                                },
+                            ],
+                        },
                         "monthly_tables": [
                             {
                                 "title": "2026-09",
@@ -260,6 +293,16 @@ class AuswertungTemplateTests(unittest.TestCase):
     def test_month_header_includes_total(self):
         html = self._render()
         self.assertIn("2026-09 (2000.00 €)", html)
+
+    def test_category_month_matrix_renders_wide_and_narrow(self):
+        html = self._render()
+        self.assertIn("Monate je Kategorie", html)
+        self.assertIn("matrix-wide", html)
+        self.assertIn("matrix-narrow", html)
+        self.assertIn("Supermarkt", html)
+        self.assertIn("1500.00 €", html)
+        self.assertIn(">Jan<", html)
+        self.assertIn(">Feb<", html)
 
 
 if __name__ == "__main__":

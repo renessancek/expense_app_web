@@ -1,4 +1,75 @@
 {% extends "base.html" %}
+{% block extra_head %}
+<style>
+  .matrix-scroll { margin: 0 -0.15rem; }
+  table.matrix {
+    width: max-content;
+    min-width: 100%;
+    font-variant-numeric: tabular-nums;
+  }
+  table.matrix th,
+  table.matrix td { padding: 0.4rem 0.55rem; }
+  table.matrix .sticky-col {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--card);
+    box-shadow: 1px 0 0 var(--border);
+    min-width: 7.5rem;
+    max-width: 11rem;
+  }
+  table.matrix thead .sticky-col { z-index: 2; }
+  table.matrix td.num.zero { color: var(--muted); }
+  .matrix-narrow { display: none; }
+  .month-card {
+    border-top: 1px solid var(--border);
+    padding: 0.75rem 0;
+  }
+  .month-card:first-child { border-top: none; padding-top: 0.15rem; }
+  .month-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.75rem;
+    margin: 0 0 0.45rem;
+    padding: 0.45rem 0.7rem;
+    background: #0f172a;
+    color: #fff;
+    border-radius: 8px;
+  }
+  .month-card-head strong { min-width: 0; }
+  .month-card-head .num {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    font-weight: 700;
+    color: #fff;
+  }
+  .month-card dl {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: repeat(6, auto);
+    grid-auto-flow: column;
+    gap: 0.2rem 0.85rem;
+    margin: 0;
+  }
+  .month-card dl div {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.4rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .month-card dt {
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+  .month-card dd { margin: 0; }
+  .month-card dd.zero { color: var(--muted); }
+  @media (max-width: 720px) {
+    .matrix-wide { display: none; }
+    .matrix-narrow { display: block; }
+  }
+</style>
+{% endblock %}
 {% block content %}
   <h1>Auswertung</h1>
   {% if message %}<div class="flash ok">{{ message }}</div>{% endif %}
@@ -40,6 +111,57 @@
       <summary>
         <h2>{{ year_block.year }}</h2>
       </summary>
+
+      <details class="collapse nested" open>
+        <summary>
+          <h3>Monate je Kategorie</h3>
+        </summary>
+        <p class="muted">Betrag je Kategorie und Kalendermonat.</p>
+        <div class="matrix-wide">
+          <div class="table-scroll matrix-scroll">
+            <table class="matrix">
+              <thead>
+                <tr>
+                  <th class="sticky-col">Kategorie</th>
+                  {% for month in year_block.category_months.months %}
+                  <th class="num">{{ month.label }}</th>
+                  {% endfor %}
+                  <th class="num">Summe</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in year_block.category_months.rows %}
+                <tr{% if row.category == 'Summe' %} class="row-total"{% endif %}>
+                  <td class="sticky-col">{{ row.category }}</td>
+                  {% for month in year_block.category_months.months %}
+                  <td class="num{% if not row[month.key] %} zero{% endif %}">{{ "%.2f"|format(row[month.key]) }} €</td>
+                  {% endfor %}
+                  <td class="num">{{ "%.2f"|format(row.total) }} €</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="matrix-narrow">
+          {% for row in year_block.category_months.rows %}
+          <article class="month-card{% if row.category == 'Summe' %} row-total{% endif %}">
+            <div class="month-card-head">
+              <strong>{{ row.category }}</strong>
+              <span class="num">{{ "%.2f"|format(row.total) }} €</span>
+            </div>
+            <dl>
+              {% for month in year_block.category_months.months %}
+              <div>
+                <dt>{{ month.label }}</dt>
+                <dd class="{% if not row[month.key] %}zero{% endif %}">{{ "%.2f"|format(row[month.key]) }} €</dd>
+              </div>
+              {% endfor %}
+            </dl>
+          </article>
+          {% endfor %}
+        </div>
+      </details>
 
       {% for month in year_block.monthly_tables %}
       <details class="collapse nested">
