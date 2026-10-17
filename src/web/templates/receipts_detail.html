@@ -65,7 +65,7 @@
 
   <div class="card">
     <h2>Positionen ({{ items|length }})</h2>
-    <p class="muted">Kategorien gelten global für gleich lautende Belegzeilen (wie unter Belegzeilen-Kategorien). Beim Speichern werden nur geänderte Zuordnungen gesendet.</p>
+    <p class="muted">Kategorien gelten global für gleich lautende Belegzeilen. Beim Speichern werden nur geänderte Zuordnungen gesendet.</p>
     {% if items %}
     <form id="receipt-detail-categories-form" action="/receipts/detail/categories" method="post">
       <input type="hidden" name="path" value="{{ path }}">

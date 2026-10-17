@@ -30,7 +30,6 @@ from web.receipts_state import (
     format_status_de,
     format_total_de,
     get_last_rows,
-    list_receipt_line_category_rows,
     load_receipt_item_categories,
     prune_missing_receipt_rows,
     receipt_name_taken,
@@ -422,56 +421,3 @@ def register_receipts_routes(app: FastAPI, templates: Jinja2Templates) -> None:
             )
         msg = quote(f"{updated} Zuordnung(en) gespeichert.")
         return RedirectResponse(f"{detail_url}&message={msg}", status_code=303)
-
-    @app.get("/receipts/categories", response_class=HTMLResponse)
-    async def receipts_categories_page(
-        request: Request,
-        _: AuthDep,
-        store: StoreDep,
-        message: str = "",
-        error: str = "",
-    ):
-        """Assign categories to unique Belegzeilen descriptions."""
-        prune_missing_receipt_rows()
-        lines = list_receipt_line_category_rows(get_last_rows())
-        suggestions = sorted(
-            set(store.categorizer.get_all_categories())
-            | {r["category"] for r in lines if r.get("category")},
-            key=str.casefold,
-        )
-        return templates.TemplateResponse(
-            request,
-            "receipt_categories.html",
-            {
-                "title": "Belegzeilen-Kategorien",
-                "nav": "receipt_categories",
-                "lines": lines,
-                "category_suggestions": suggestions,
-                "message": message,
-                "error": error,
-            },
-        )
-
-    @app.post("/receipts/categories/save")
-    async def receipts_categories_save(request: Request, _: AuthDep):
-        """Save category assignments for all Belegzeilen rows in one submit."""
-        # Starlette defaults max_fields=1000; each Belegzeile posts 2 fields.
-        form = await request.form(max_fields=50_000)
-        description = form.getlist("description")
-        category = form.getlist("category")
-        if len(category) < len(description):
-            category = list(category) + [""] * (len(description) - len(category))
-        updated = 0
-        for desc, cat in zip(description, category):
-            desc = (desc or "").strip()
-            if not desc:
-                continue
-            set_receipt_item_category(desc, (cat or "").strip())
-            updated += 1
-        if updated == 0:
-            return RedirectResponse(
-                f"/receipts/categories?error={quote('Keine Zeilen zum Speichern.')}",
-                status_code=303,
-            )
-        msg = quote(f"{updated} Zuordnung(en) gespeichert.")
-        return RedirectResponse(f"/receipts/categories?message={msg}", status_code=303)
